@@ -1,10 +1,38 @@
+import asyncio
 from celery import shared_task
-from app.services.processors.pdf import textract, tesseract, pdf_miner, pypdf2, mupdf
+from app.services.processors.pdf import textract, tesseract, pdf_miner, pyPDF2, muPDF
 from app.models.pdf_model import PDFTextResponse
 from app.config import logger
+import fitz  # PyMuPDF
+
+def is_pdf_scanned(pdf_path):
+    """
+    Check if any page in a PDF is scanned.
+
+    Args:
+    pdf_path (str): The path to the PDF file.
+
+    Returns:
+    bool: True if any page is scanned, False otherwise.
+    """
+    try:
+        doc = fitz.open(pdf_path)
+        for page in doc:
+            # Get the page's text to determine if it's mostly text-based
+            text = page.get_text().strip()
+            # Get the number of image blocks in the page
+            img_blocks = page.get_images(full=True)
+            
+            # If there's very little text and at least one image, consider it scanned
+            if len(text) < 50 and img_blocks:  # Threshold values can be adjusted
+                return True
+        return False
+    except Exception as e:
+        logger.error(f"Error determining if any page is scanned: {e}")
+        return False  # Or handle the error as needed
 
 @shared_task
-def process_pdf(file_path, file_type):
+async def process_pdf(file_path):
     """
     Process PDF files based on type and handle fallbacks.
 
@@ -16,16 +44,17 @@ def process_pdf(file_path, file_type):
     PDFTextResponse: Contains the file name, concatenated text, and bounding boxes.
     """
     try:
-        if file_type == 'scanned':
-            response = textract.process_pdfs_with_textract(file_path)
+        scanned = is_pdf_scanned(file_path)
+        if scanned:
+            response = textract.useTextract(file_path)
             if not response.bounding_boxes:
-                response = tesseract.use_tesseract(file_path)
-        elif file_type == 'readable':
-            response = pdf_miner.extract_text_and_boxes_pdfminer(file_path)
+                response = asyncio.run(tesseract.useTesseract(file_path))
+        else:
+            response = await asyncio.run(pdf_miner.usePDFMiner(file_path))
             if not response.bounding_boxes:
-                response = pypdf2.extract_text_pypdf2(file_path)
+                response = asyncio.run(pyPDF2.usePyPDF2(file_path))
                 if not response.bounding_boxes:
-                    response = mupdf.extract_text_and_boxes_pymupdf(file_path)
+                    response = asyncio.run(muPDF.usePyMuPDF(file_path))
         return response
     except Exception as e:
         logger.error(f"Failed to process PDF {file_path} with error: {e}")

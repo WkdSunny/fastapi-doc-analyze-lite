@@ -1,9 +1,18 @@
 module.exports = {
   apps: [
     {
-      name: 'fastapi-app',
-      script: 'uvicorn',
-      args: 'app.main:app --host 0.0.0.0 --port 8008 --workers 4',
+      name: 'redis-server',
+      script: 'redis-server',
+      args: '', // No arguments needed for the default configuration
+      interpreter: 'none',
+      env: {
+        // Add any environment variables for Redis if needed
+      }
+    },
+    {
+      name: 'celery-worker',
+      script: 'celery',
+      args: '-A app.tasks.celery_config worker --loglevel=info',
       interpreter: 'python3',
       env: {
         "AWS_ACCESS_KEY_ID": "your_aws_access_key_id",
@@ -14,11 +23,10 @@ module.exports = {
       }
     },
     {
-      name: 'celery-worker',
-      script: 'python',  // Point to the Python executable
-      args: '-m celery -A app.tasks.celery_app worker --loglevel=info',  // Correct module path
+      name: 'fastapi-app',
+      script: 'uvicorn',
+      args: 'app.main:app --host 0.0.0.0 --port 8008 --reload',
       interpreter: 'python3',
-      // cwd: '/path/to/your/project/root',  // Ensure you provide the correct path to your project root
       env: {
         "AWS_ACCESS_KEY_ID": "your_aws_access_key_id",
         "AWS_SECRET_ACCESS_KEY": "your_aws_secret_access_key",
@@ -26,6 +34,6 @@ module.exports = {
         "CLAUDE_API_KEY": "your_claude_api_key",
         "BEARER_TOKEN": "your_bearer_token"
       }
-    }    
+    }
   ]
 };

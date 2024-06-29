@@ -14,6 +14,7 @@ class Settings:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
     BEARER_TOKEN = os.getenv("BEARER_TOKEN")
+    REDIS_URL = os.getenv("REDIS_URL")
 
     # Define the path for log files
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Gets the directory where the script resides

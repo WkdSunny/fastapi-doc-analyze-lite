@@ -1,16 +1,16 @@
 # celery_config.py
 
 from celery import Celery
-import logging
-
-# Set up the basic configuration for logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from app.config import logger, settings
 
 # Initialize the Celery application
 app = Celery('pdf_tasks',
-             broker='redis://localhost:6379/0',
-             backend='redis://localhost:6379/0',
-             include=['pdf_tasks'])  # Ensure 'pdf_tasks' is the correct name of your module containing tasks
+             broker= settings.REDIS_URL,
+             backend= settings.REDIS_URL,
+            #  broker='redis://localhost:6379/0',
+            #  backend='redis://localhost:6379/0',
+             include=['app.services.processors.pdf.pdf_tasks'])  # Ensure 'pdf_tasks' is the correct name of your module containing tasks
+
 
 # Configure Celery settings
 app.conf.update(
@@ -26,9 +26,9 @@ def start_worker():
     try:
         app.start()
     except KeyboardInterrupt:
-        logging.info("Worker shutdown")
+        logger.info("Worker shutdown through keyboard interruption")
     except Exception as e:
-        logging.error(f"Failed to start the Celery worker: {e}")
+        logger.error(f"Failed to start the Celery worker: {e}")
 
 if __name__ == '__main__':
     start_worker()

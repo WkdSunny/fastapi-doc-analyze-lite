@@ -1,12 +1,18 @@
+# muPDF.py
+"""
+This module defines the PDF processing task using PyMuPDF (MuPDF).
+"""
+
+import fitz
+import asyncio
 from app.tasks.celery_config import app
-import fitz  # PyMuPDF
 from app.models.pdf_model import BoundingBox, PDFTextResponse
 from app.config import logger
 
 @app.task
-def extract_text_and_boxes_pymupdf(file_path):
+async def usePyMuPDF(file_path):
     """
-    Extracts text and bounding boxes from a readable PDF using PyMuPDF (MuPDF).
+    Extracts text and bounding boxes from a readable PDF using PyMuPDF (MuPDF) asynchronously.
     Each text block's bounding box and text content are stored.
 
     Args:
@@ -17,7 +23,8 @@ def extract_text_and_boxes_pymupdf(file_path):
     """
     try:
         text_and_boxes = []
-        doc = fitz.open(file_path)
+        # Use asyncio.to_thread to run the blocking operation in a separate thread
+        doc = await asyncio.to_thread(fitz.open, file_path)
         for page_number, page in enumerate(doc, start=1):
             blocks = page.get_text("dict")["blocks"]
             for block in blocks:
@@ -38,5 +45,6 @@ def extract_text_and_boxes_pymupdf(file_path):
 # Example usage:
 if __name__ == "__main__":
     path = "path_to_your_pdf_file.pdf"
-    results = extract_text_and_boxes_pymupdf(path)
+    # Use asyncio.run to execute the async function
+    results = asyncio.run(usePyMuPDF(path))
     print(results)

@@ -1,3 +1,8 @@
+# tesseract.py
+"""
+This module defines the Tesseract OCR processing task for PDF files.
+"""
+
 from app.tasks.celery_config import app
 import asyncio
 import numpy as np
@@ -59,7 +64,7 @@ async def extract_text_and_boxes(image):
         return []
 
 @app.task
-async def use_tesseract(file_path):
+async def useTesseract(file_path):
     """
     Process a PDF file to extract text using OCR.
 
@@ -90,5 +95,5 @@ async def use_tesseract(file_path):
 # Example usage:
 if __name__ == "__main__":
     file_path = 'path_to_your_pdf_file.pdf'
-    results = asyncio.run(use_tesseract(file_path))
+    results = asyncio.run(useTesseract(file_path))
     print(results)

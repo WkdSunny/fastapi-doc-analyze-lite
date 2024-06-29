@@ -1,3 +1,8 @@
+# textract.py
+"""
+This module defines the PDF processing task using AWS Textract.
+"""
+
 from app.tasks.celery_config import app
 import asyncio
 import aiobotocore
@@ -5,7 +10,7 @@ from app.models.pdf_model import PDFTextResponse, BoundingBox
 from app.config import settings, logger
 
 @app.task
-async def process_pdfs_with_textract(documents):
+async def useTextract(documents):
     """
     Process PDFs with AWS Textract.
 
@@ -16,7 +21,9 @@ async def process_pdfs_with_textract(documents):
     list: List of PDFTextResponse objects.
     """
     try:
-        async with aiobotocore.get_session().create_client('textract', region_name=settings.AWS_REGION) as client:
+        async with aiobotocore.get_session().create_client('textract', region_name=settings.AWS_REGION,
+                                                           aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                                                           aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY) as client:
             job_ids = await submit_documents(client, documents)
             results = await get_results(client, job_ids)
             responses = [process_result(result) for result in results]
@@ -154,3 +161,9 @@ def extract_bounding_boxes(result):
     except Exception as e:
         logger.error(f"Error extracting bounding boxes: {e}")
         return []
+
+# Example usage:
+if __name__ == "__main__":
+    documents = [{'Bucket': 'your-bucket-name', 'Name': 'your-document-name.pdf'}]
+    results = asyncio.run(useTextract(documents))
+    print(results)

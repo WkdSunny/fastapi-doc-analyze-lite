@@ -51,3 +51,7 @@ Thumbs.db
 
 # Virtual environments
 .venv/
+.env
+
+# IDE
+.vscode/
