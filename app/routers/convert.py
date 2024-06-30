@@ -8,7 +8,7 @@ import filetype
 from celery.result import AsyncResult
 from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks
 from typing import List, Dict, Any
-from app.services.processors.pdf.pdf_tasks import process_pdf, simple_task
+from app.services.processors.pdf.pdf_tasks import process_pdf_task
 # from app.services.processors.pdf.pdf_tasks import simple_task
 from app.services.processors.pdf.textract import useTextract
 from app.services.processors.excel import useOpenPyXL
@@ -21,16 +21,15 @@ router = APIRouter(
     tags=["convert"]
 )
 
-async def wait_for_celery_task(task_id, timeout):
+# async def wait_for_celery_task(task_id, timeout):
+async def wait_for_celery_task(task, timeout):
+    logger.info(f"Waiting for Celery task with ID: {task.id}, Type of task_id: {type(task.id)}")
     start_time = asyncio.get_event_loop().time()
     while True:
-        result = AsyncResult(task_id)
-        print(f'result: {result}')
-        print(f'result.ready(): {result.ready()}')
-        logger.info(f"Task state: {result.state}")  # Log task state
+        # result = AsyncResult(task_id)
+        result = task.get()
         if result.ready():
             task_result = result.result
-            logger.info(f"Raw Task result: {task_result}")  # Log raw result
             return task_result
         elif (asyncio.get_event_loop().time() - start_time) > timeout:
             raise TimeoutError("Celery task timed out")
@@ -71,7 +70,7 @@ async def convert_files(files: List[UploadFile] = File(...)):
 
             # Process file based on type
             if 'pdf' in content_type:
-                task = process_pdf.delay(s3_file_key)
+                task = process_pdf_task.delay(s3_file_key)
             elif 'excel' in content_type or 'spreadsheetml' in content_type:
                 task = useOpenPyXL.delay(s3_file_key)
             elif 'wordprocessingml' in content_type or 'msword' in content_type:

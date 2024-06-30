@@ -78,18 +78,18 @@ async def useTesseract(file_path):
         images = convert_from_path(file_path, dpi=300, fmt='jpeg')
     except pdf_exceptions.PDFInfoNotInstalledError as e:
         logger.error(f"PDFInfo not installed, cannot convert PDF: {e}")
-        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[])
+        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).dict()
     except pdf_exceptions.PDFPageCountError as e:
         logger.error(f"Cannot read page count: {e}")
-        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[])
+        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).dict()
     except Exception as e:
         logger.error(f"Failed to convert PDF to image: {e}")
-        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[])
+        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).dict()
 
     tasks = [process_image(image) for image in images]
     processed_images = await asyncio.gather(*tasks)
     results = await asyncio.gather(*(extract_text_and_boxes(image) for image in processed_images))
-    text_responses = PDFTextResponse(file_name=file_path, text="\n".join([box.text for result in results for box in result]), bounding_boxes=[box for result in results for box in result])
+    text_responses = PDFTextResponse(file_name=file_path, text="\n".join([box.text for result in results for box in result]), bounding_boxes=[box for result in results for box in result]).dict()
     return text_responses
 
 # Example usage:

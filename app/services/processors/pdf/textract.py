@@ -128,10 +128,10 @@ def process_result(result):
         text = extract_text(result)
         bounding_boxes = extract_bounding_boxes(result)
         logger.info("Processed Textract result")
-        return PDFTextResponse(file_name=result['DocumentLocation']['Name'], text=text, bounding_boxes=bounding_boxes)
+        return PDFTextResponse(file_name=result['DocumentLocation']['Name'], text=text, bounding_boxes=bounding_boxes).dict()
     except Exception as e:
         logger.error(f"Failed to process result: {e}")
-        return PDFTextResponse(file_name=result['DocumentLocation']['Name'], text="", bounding_boxes=[])
+        return PDFTextResponse(file_name=result['DocumentLocation']['Name'], text="", bounding_boxes=[]).dict()
 
 def extract_text(result):
     """

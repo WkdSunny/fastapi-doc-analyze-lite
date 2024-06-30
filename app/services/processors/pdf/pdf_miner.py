@@ -34,10 +34,10 @@ async def usePDFMiner(file_path):
                     )
                     text_and_boxes.append(bbox)
         logger.info(f"Extracted text from PDF using PDFMiner: {file_path}")
-        return PDFTextResponse(file_name=file_path, text="\n".join([bbox.text for bbox in text_and_boxes]), bounding_boxes=text_and_boxes)
+        return PDFTextResponse(file_name=file_path, text="\n".join([bbox.text for bbox in text_and_boxes]), bounding_boxes=text_and_boxes).dict()
     except Exception as e:
         logger.error(f"Failed to extract from PDF using PDFMiner: {e}")
-        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[])
+        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).dict()
 
 # Example usage:
 if __name__ == "__main__":

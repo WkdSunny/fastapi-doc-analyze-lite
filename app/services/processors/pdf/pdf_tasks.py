@@ -44,6 +44,27 @@ def simple_task():
     return "Simple task result"
 
 @shared_task
+def process_pdf_task(s3_file_key):
+    """
+    Process PDF files based on type and handle fallbacks.
+
+    Args:
+    s3_file_key (str): The S3 key of the PDF file.
+
+    Returns:
+    PDFTextResponse: Contains the file name, concatenated text, and bounding boxes.
+    """
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        # If the loop is already running, you might need to run your coroutine differently,
+        # for example, using run_coroutine_threadsafe or ensuring it's called from an async context.
+        future = asyncio.run_coroutine_threadsafe(process_pdf(s3_file_key), loop)
+        return future.result()
+    else:
+        # If the loop is not running, you can just call your coroutine.
+        return loop.run_until_complete(process_pdf(s3_file_key))
+
+@shared_task
 async def process_pdf(s3_file_key):
     """
     Process PDF files based on type and handle fallbacks.
@@ -55,11 +76,11 @@ async def process_pdf(s3_file_key):
     PDFTextResponse: Contains the file name, concatenated text, and bounding boxes.
     """
     try:
-        pdb.set_trace()
+        # pdb.set_trace()
         logger.info(f"Starting process_pdf task for {s3_file_key}")
 
         # Start remote debugger
-        RemotePdb('127.0.0.1', 5555).set_trace()  # Use a different port if necessary
+        # RemotePdb('127.0.0.1', 5555).set_trace()  # Use a different port if necessary
 
         # Download the file from S3
         file_stream = await download_file_from_s3(settings.AWS_S3_BUCKET_NAME, s3_file_key)
@@ -91,7 +112,7 @@ async def process_pdf(s3_file_key):
         return response
     except Exception as e:
         logger.error(f"Failed to process PDF {s3_file_key} with error: {e}")
-        return PDFTextResponse(file_name=s3_file_key, text="", bounding_boxes=[])
+        return PDFTextResponse(file_name=s3_file_key, text="", bounding_boxes=[]).dict()
 
 # Example usage:
 if __name__ == "__main__":

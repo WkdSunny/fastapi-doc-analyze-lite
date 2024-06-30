@@ -28,27 +28,21 @@ async def upload_file_to_s3(file):
         temp_filename = f"{uuid.uuid4()}_{file.filename}"
         logger.info(f"Uploading file to S3: {file.filename} as {temp_filename}")  # Log the upload attempt
         session = AioSession()
-        try:
-            async with session.create_client('s3',
-                                            region_name=settings.AWS_REGION,
-                                            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-                                            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY) as s3:
-                logger.info(f"Uploading file: {file.filename} to S3 bucket: {settings.AWS_S3_BUCKET_NAME} as {temp_filename}")
-                try:
-                    # Upload the file to S3
-                    await s3.put_object(Bucket=settings.AWS_S3_BUCKET_NAME, Key=temp_filename, Body=file.file)
-                except BotoCoreError as e:
-                    logger.error(f"Failed to upload file to S3: {e}")  # Log BotoCoreError
+        async with session.create_client('s3',
+                                        region_name=settings.AWS_REGION,
+                                        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                                        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY) as s3:
+            logger.info(f"Uploading file: {file.filename} to S3 bucket: {settings.AWS_S3_BUCKET_NAME} as {temp_filename}")
+            # Upload the file to S3
+            await s3.put_object(Bucket=settings.AWS_S3_BUCKET_NAME, Key=temp_filename, Body=file.file)
             logger.info(f"File uploaded successfully to S3: {temp_filename}")  # Log successful upload
             return temp_filename
-        except BotoCoreError as e:
-            logger.error(f"Failed to create client: {e}")
     except BotoCoreError as e:
         logger.error(f"Failed to upload file to S3: {e}")  # Log BotoCoreError
-        # raise HTTPException(status_code=500, detail="Failed to upload file to S3.")
+        raise HTTPException(status_code=500, detail="Failed to upload file to S3.")
     except Exception as e:
         logger.error(f"Unexpected error during file upload to S3: {e}")  # Log unexpected errors
-        # raise HTTPException(status_code=500, detail="Unexpected error during file upload to S3.")
+        raise HTTPException(status_code=500, detail="Unexpected error during file upload to S3.")
 
 async def download_file_from_s3(bucket_name, file_key):
     """
