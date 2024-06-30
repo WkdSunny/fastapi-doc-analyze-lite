@@ -40,14 +40,6 @@ def is_pdf_scanned(file_stream):
 
 @shared_task()
 def simple_task():
-    # pdb.set_trace()
-    # logger.info(f"Simple task started with {seconds} seconds")
-    # self.update_state(state='PROGRESS', meta={'progress': 0})
-    # for i in range(seconds):
-    #     self.update_state(state='PROGRESS', meta={'progress': i})
-    #     time.sleep(1)
-
-    
     logger.info("Simple task executed")
     return "Simple task result"
 
