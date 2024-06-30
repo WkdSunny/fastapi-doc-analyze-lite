@@ -5,7 +5,7 @@ This module defines the PDF processing task using AWS Textract.
 
 from app.tasks.celery_config import app
 import asyncio
-import aiobotocore
+from aiobotocore.session import AioSession
 from app.models.pdf_model import PDFTextResponse, BoundingBox
 from app.config import settings, logger
 
@@ -21,12 +21,16 @@ async def useTextract(documents):
     list: List of PDFTextResponse objects.
     """
     try:
-        async with aiobotocore.get_session().create_client('textract', region_name=settings.AWS_REGION,
+        session = AioSession()
+        logger.info("Processing PDFs with Textract")
+        logger.info(f"Creating Textract client with region: {settings.AWS_REGION}")
+        async with session.create_client('textract', region_name=settings.AWS_REGION,
                                                            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
                                                            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY) as client:
             job_ids = await submit_documents(client, documents)
             results = await get_results(client, job_ids)
             responses = [process_result(result) for result in results]
+            logger.info("Processed all PDFs with Textract")
             return responses
     except Exception as e:
         logger.error(f"Failed to process PDFs with Textract: {e}")
@@ -45,6 +49,7 @@ async def submit_documents(client, documents):
     """
     try:
         tasks = [process_document(client, doc) for doc in documents]
+        logger.info("Submitting documents for text detection")
         return await asyncio.gather(*tasks)
     except Exception as e:
         logger.error(f"Error submitting documents for text detection: {e}")
@@ -63,6 +68,7 @@ async def process_document(client, document):
     """
     try:
         response = await client.start_document_text_detection(DocumentLocation={'S3Object': document})
+        logger.info(f"Started text detection for document: {document['Name']}")
         return response['JobId']
     except Exception as e:
         logger.error(f"Error starting text detection: {e}")
@@ -83,8 +89,10 @@ async def get_results(client, job_ids):
     for job_id in job_ids:
         try:
             results.append(await get_document_text(client, job_id))
+            logger.info(f"Retrieved document text for Job ID {job_id}")
         except Exception as e:
             logger.error(f"Failed to retrieve document text for Job ID {job_id}: {e}")
+    logger.info("Retrieved all document text detection results")
     return results
 
 async def get_document_text(client, job_id):
@@ -103,6 +111,7 @@ async def get_document_text(client, job_id):
         if response['JobStatus'] in ['SUCCEEDED', 'FAILED']:
             break
         await asyncio.sleep(5)  # Reduce frequency of checks to avoid rate limits
+    logger.info(f"Retrieved document text detection result for Job ID {job_id}")
     return response
 
 def process_result(result):
@@ -118,6 +127,7 @@ def process_result(result):
     try:
         text = extract_text(result)
         bounding_boxes = extract_bounding_boxes(result)
+        logger.info("Processed Textract result")
         return PDFTextResponse(file_name=result['DocumentLocation']['Name'], text=text, bounding_boxes=bounding_boxes)
     except Exception as e:
         logger.error(f"Failed to process result: {e}")
@@ -134,6 +144,7 @@ def extract_text(result):
     str: Extracted text.
     """
     try:
+        logger.info("Extracting text from Textract result")
         return '\n'.join(block['Text'] for block in result['Blocks'] if block['BlockType'] == 'LINE')
     except Exception as e:
         logger.error(f"Error extracting text: {e}")
@@ -150,6 +161,7 @@ def extract_bounding_boxes(result):
     list: List of BoundingBox objects.
     """
     try:
+        logger.info("Extracting bounding boxes from Textract result")
         return [
             BoundingBox(
                 page=1,  # Assuming all text is from the first page

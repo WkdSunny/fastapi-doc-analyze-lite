@@ -1,62 +1,115 @@
-#convert.py
+# convert.py
 """
 This module defines the conversion routes for the FastAPI application.
 """
 
-import magic
-from fastapi import APIRouter, File, UploadFile, HTTPException
-from app.services.processors.pdf.pdf_tasks import process_pdf
-from app.services.processors.pdf.textract import useTextract
-from app.services.processors.excel import useOpenPyXL
-from app.services.processors.word import useDocX
-from app.models.pdf_model import PDFTextResponse
-from app.tasks.aws_services import upload_file_to_s3, download_file_from_s3
+import asyncio
+import filetype
+from celery.result import AsyncResult
+from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks
+from typing import List, Dict, Any
+# from app.services.processors.pdf.pdf_tasks import process_pdf, simple_task
+from app.services.processors.pdf.pdf_tasks import simple_task
+# from app.services.processors.pdf.textract import useTextract
+# from app.services.processors.excel import useOpenPyXL
+# from app.services.processors.word import useDocX
+# from app.tasks.aws_services import upload_file_to_s3
 from app.config import settings, logger
-from typing import List
 
 router = APIRouter(
     prefix="/convert",
     tags=["convert"]
 )
 
-@router.post("/", response_model=List[PDFTextResponse])
-async def convert_files(files: List[UploadFile] = File(...)):
-    """
-    Convert uploaded files to their respective processed formats.
+# async def wait_for_celery_task(task, timeout):
+#     start_time = asyncio.get_event_loop().time()
+#     while True:
+#         print(f'task: {task}')
+#         if task.ready():
+#             # result = task.result
+#             # logger.info(f"Task state: {task.state}")  # Debugging: Log task state
+#             # logger.info(f"Raw Task result: {result}")  # Debugging: Log raw result
+#             # return result
+#             return task.result
+#         elif (asyncio.get_event_loop().time() - start_time) > timeout:
+#             raise TimeoutError("Celery task timed out")
+#         await asyncio.sleep(1)  # Sleep for a short period to avoid busy waiting
 
-    Args:
-    files (List[UploadFile]): List of files to be uploaded and processed.
+async def wait_for_celery_task(task_id, timeout):
+    start_time = asyncio.get_event_loop().time()
+    while True:
+        result = AsyncResult(task_id)
+        print(f'result: {result}')
+        print(f'result.ready(): {result.ready()}')
+        if result.ready():
+            task_result = result.result
+            logger.info(f"Task state: {result.state}")  # Log task state
+            logger.info(f"Raw Task result: {task_result}")  # Log raw result
+            return task_result
+        elif (asyncio.get_event_loop().time() - start_time) > timeout:
+            raise TimeoutError("Celery task timed out")
+        await asyncio.sleep(1)  # Sleep for a short period to avoid busy waiting
 
-    Returns:
-    List[PDFTextResponse]: List of processed file responses.
-    """
-    responses = []
-    for file in files:
-        try:
-            content_type = magic.from_buffer(await file.read(2048), mime=True)
-            await file.seek(0)
-            temp_filename = await upload_file_to_s3(file.file, file.filename)
-            s3_file_key = temp_filename  # Assuming temp_filename is the key
+@router.post("/", response_model=Dict[str, Any])
+async def convert_files():
+    try:
+        task = simple_task.delay()
+        logger.info(f"Queued task: {task.id}")  # Log task ID
+        result = await wait_for_celery_task(task.id, 10)
+        return {"status": "success", "result": result}
+    except Exception as e:
+        logger.error(f"Failed to execute task: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+# async def convert_files(files: List[UploadFile] = File(...)):
+    # responses = []
+    # unsupported_files = []
+    # failed_files = []
+    # success_files = []
 
-            # Download file from S3 for processing
-            file_stream = await download_file_from_s3(settings.AWS_S3_BUCKET_NAME, s3_file_key)
+    # for file in files:
+    #     try:
+    #         logger.info(f'Processing file: {file.filename}')
+    #         kind = filetype.guess(await file.read(2048))
+    #         if kind is None:
+    #             raise ValueError("Cannot determine file type")
+    #         content_type = kind.mime
+    #         await file.seek(0)
+    #         logger.info(f"File type: {content_type}")
 
-            # Process file based on type
-            if 'pdf' in content_type:
-                response = await process_pdf.delay(file_stream)
-            elif 'excel' in content_type or 'spreadsheetml' in content_type:
-                response = await useOpenPyXL.delay(file_stream)
-            elif 'wordprocessingml' in content_type or 'msword' in content_type:
-                response = await useDocX.delay(file_stream)
-            elif 'image' in content_type:
-                response = await useTextract.delay(file_stream)
-            else:
-                raise ValueError("Unsupported file type")
+    #         # Upload the file to S3
+    #         temp_filename = await upload_file_to_s3(file)
+    #         logger.info(f"Uploaded to S3 with temp filename: {temp_filename}")
+    #         s3_file_key = temp_filename  # Assuming temp_filename is the key
 
-            result = response.get()
-            responses.append({"filename": file.filename, "response": result})
-        except Exception as e:
-            logger.error(f"Failed to process file {file.filename}: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+    #         # Process file based on type
+    #         if 'pdf' in content_type:
+    #             task = process_pdf.delay(s3_file_key)
+    #         elif 'excel' in content_type or 'spreadsheetml' in content_type:
+    #             task = useOpenPyXL.delay(s3_file_key)
+    #         elif 'wordprocessingml' in content_type or 'msword' in content_type:
+    #             task = useDocX.delay(s3_file_key)
+    #         elif 'image' in content_type:
+    #             documents = [{'Bucket': settings.AWS_S3_BUCKET_NAME, 'Name': s3_file_key}]
+    #             task = useTextract.delay(documents)
+    #         else:
+    #             unsupported_files.append(file.filename)
+    #             logger.error(f"Unsupported file type: {file.filename}")
+    #             continue
 
-    return responses
+    #         result = await wait_for_celery_task(task, 180)
+    #         success_files.append(file.filename)
+    #         responses.append({"filename": file.filename, "response": result})
+    #     except Exception as e:
+    #         failed_files.append(file.filename)
+    #         logger.error(f"Failed to process file {file.filename}: {e}")
+
+    # if not responses:
+    #     raise HTTPException(status_code=500, detail="No files processed successfully")
+
+    # return {
+    #     "status": 200,
+    #     "success": True,
+    #     "unsupported_files": unsupported_files,
+    #     "conversion_failed": failed_files,
+    #     "result": responses
+    # }

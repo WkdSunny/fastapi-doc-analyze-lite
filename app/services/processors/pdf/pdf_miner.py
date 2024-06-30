@@ -1,9 +1,9 @@
-from app.tasks.celery_config import app
+import asyncio
 from pdfminer.high_level import extract_pages
 from pdfminer.layout import LTTextContainer
+from app.tasks.celery_config import app
 from app.models.pdf_model import BoundingBox, PDFTextResponse
 from app.config import logger
-import asyncio
 
 @app.task
 async def usePDFMiner(file_path):
@@ -19,6 +19,7 @@ async def usePDFMiner(file_path):
     """
     try:
         text_and_boxes = []
+        logger.info(f"Extracting text from PDF using PDFMiner: {file_path}")
         # Run extract_pages in a separate thread
         pages = await asyncio.to_thread(extract_pages, file_path)
         for page_number, page_layout in enumerate(pages, start=1):
@@ -32,6 +33,7 @@ async def usePDFMiner(file_path):
                         text=text.strip()
                     )
                     text_and_boxes.append(bbox)
+        logger.info(f"Extracted text from PDF using PDFMiner: {file_path}")
         return PDFTextResponse(file_name=file_path, text="\n".join([bbox.text for bbox in text_and_boxes]), bounding_boxes=text_and_boxes)
     except Exception as e:
         logger.error(f"Failed to extract from PDF using PDFMiner: {e}")
