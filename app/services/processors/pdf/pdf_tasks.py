@@ -11,7 +11,9 @@ from app.services.processors.pdf import textract, tesseract, pdf_miner, pyPDF2, 
 from app.models.pdf_model import PDFTextResponse
 from app.config import settings, logger
 from app.tasks.aws_services import download_file_from_s3
+from app.tasks.celery_config import app
 import fitz  # PyMuPDF
+import time
 
 def is_pdf_scanned(file_stream):
     """
@@ -36,9 +38,16 @@ def is_pdf_scanned(file_stream):
         logger.error(f"Error determining if any page is scanned: {e}")
         return False
 
-@shared_task
+@shared_task()
 def simple_task():
-    pdb.set_trace()
+    # pdb.set_trace()
+    # logger.info(f"Simple task started with {seconds} seconds")
+    # self.update_state(state='PROGRESS', meta={'progress': 0})
+    # for i in range(seconds):
+    #     self.update_state(state='PROGRESS', meta={'progress': i})
+    #     time.sleep(1)
+
+    
     logger.info("Simple task executed")
     return "Simple task result"
 

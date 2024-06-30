@@ -23,6 +23,7 @@ app.conf.update(
     timezone='Europe/London',
     enable_utc=True,
     broker_connection_retry_on_startup=True,
+    worker_log_level='INFO',
 )
 
 # Ensure the module where 'process_pdf' is defined is imported

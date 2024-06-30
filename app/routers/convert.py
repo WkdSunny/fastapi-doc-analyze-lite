@@ -41,9 +41,9 @@ async def wait_for_celery_task(task_id, timeout):
         result = AsyncResult(task_id)
         print(f'result: {result}')
         print(f'result.ready(): {result.ready()}')
+        logger.info(f"Task state: {result.state}")  # Log task state
         if result.ready():
             task_result = result.result
-            logger.info(f"Task state: {result.state}")  # Log task state
             logger.info(f"Raw Task result: {task_result}")  # Log raw result
             return task_result
         elif (asyncio.get_event_loop().time() - start_time) > timeout:
@@ -54,9 +54,16 @@ async def wait_for_celery_task(task_id, timeout):
 async def convert_files():
     try:
         task = simple_task.delay()
-        logger.info(f"Queued task: {task.id}")  # Log task ID
-        result = await wait_for_celery_task(task.id, 10)
-        return {"status": "success", "result": result}
+        # logger.info(f"Queued task: {task.id}")  # Log task ID
+        # result = await wait_for_celery_task(task.id, 15)
+        result = AsyncResult(task.id)
+        ready = await asyncio.get_event_loop().run_in_executor(None, result.ready)
+        if result.ready():
+            task_result = await asyncio.get_event_loop().run_in_executor(None, lambda: result.result)
+            logger.info(f"Task result: {task_result}")
+            return {"status": "success", "result": task_result}
+        else:
+            raise HTTPException(status_code=500, detail="Task did not complete successfully")
     except Exception as e:
         logger.error(f"Failed to execute task: {e}")
         raise HTTPException(status_code=500, detail=str(e))
