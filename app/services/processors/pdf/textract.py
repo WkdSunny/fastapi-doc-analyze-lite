@@ -71,6 +71,9 @@ async def process_document(client, document):
         response = await client.start_document_text_detection(DocumentLocation={'S3Object': document})
         logger.info(f"Started text detection for document: {document['Name']}")
         return response['JobId']
+    except KeyError as e:
+        logger.error(f"DocumentLocation missing in Textract result: {e}")
+        raise
     except Exception as e:
         logger.error(f"Error starting text detection: {e}")
         raise
