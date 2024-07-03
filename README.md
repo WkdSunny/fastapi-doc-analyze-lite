@@ -72,6 +72,7 @@ fastapi-iac-py
       4. Start redis server -
         4.1. Local: "redis-server"
       5. You can check using "redis-cli ping"
+      6. Stop redis - redis-cli shutdown
     Note: Windows may need to be restarted before starting redis server and system variables take effect after windows restart.
 
   For MAC:
@@ -92,5 +93,14 @@ fastapi-iac-py
       4. You can check using "redis-cli ping"
 
 2. Start Redis Server
-3. Start Celery Worker - celery -A app.tasks.celery_config worker --loglevel=info
-4. Start Uvicorn - uvicorn app.main:app --host 0.0.0.0 --port 8008 --reload
+3. Start Celery Worker - celery -A app.tasks.celery_config worker --loglevel=info --logfile="app/logs/celery.log"
+4. Start watchdog - python python watchdog_celery.py
+  4.1. watchdog, watches change in app and restarts celery
+  4.2. Not needed in prod, celery is supposed to be long running task handler
+  4.3. Use in dev so that you dont need to manually restart celery on every change
+  4.4. Not included in requirement.txt
+  4.5. Manual installation - pip install watchdog
+5. Start FastAPI server
+  5.1. To start Uvicorn - uvicorn app.main:app --host 0.0.0.0 --port 8008 --reload
+  5.2. To start Gunicorn - gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8008 --reload --log-level info
+

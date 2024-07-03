@@ -58,3 +58,6 @@ Thumbs.db
 
 # redis dump file
 dump.rdb 
+
+# Local files
+ignr.*

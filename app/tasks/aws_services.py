@@ -70,8 +70,9 @@ async def download_file_from_s3(bucket_name, file_key):
                     file_data = await stream.read()
                 logger.info(f"File downloaded successfully from S3: {file_key}")  # Log successful download
                 # Convert the binary data to a base64-encoded string
-                base64_encoded_data = base64.b64encode(file_data).decode('utf-8')
-                return base64_encoded_data
+                # base64_encoded_data = base64.b64encode(file_data).decode('utf-8')
+                # return base64_encoded_data
+                return file_data
             except BotoCoreError as e:
                 logger.error(f"Failed to download file from S3: {e}")  # Log BotoCoreError
                 # raise HTTPException(status_code=500, detail="Failed to access file from S3.")

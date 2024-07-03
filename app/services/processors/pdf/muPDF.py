@@ -6,7 +6,8 @@ This module defines the PDF processing task using PyMuPDF (MuPDF).
 import fitz
 import asyncio
 from app.tasks.celery_config import app
-from app.models.pdf_model import BoundingBox, PDFTextResponse
+# from app.models.pdf_model import BoundingBox, PDFTextResponse
+from app.models.pdf_model import BoundingBox
 from app.config import logger
 
 @app.task
@@ -37,10 +38,20 @@ async def usePyMuPDF(file_path):
                     )
                     text_and_boxes.append(bbox)
         doc.close()
-        return PDFTextResponse(file_name=file_path, text="\n".join([bbox.text for bbox in text_and_boxes]), bounding_boxes=text_and_boxes).dict()
+        # return PDFTextResponse(file_name=file_path, text="\n".join([bbox.text for bbox in text_and_boxes]), bounding_boxes=text_and_boxes).to_dict()
+        return {
+            "file_name": file_path,
+            "text": "\n".join([bbox.text for bbox in text_and_boxes]),
+            "bounding_boxes": [bbox.dict() for bbox in text_and_boxes]
+        }
     except Exception as e:
         logger.error(f"Failed to extract from PDF using PyMuPDF: {e}")
-        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).dict()
+        # return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
+        return {
+            "file_name": file_path,
+            "text": "",
+            "bounding_boxes": []
+        }
 
 # Example usage:
 if __name__ == "__main__":

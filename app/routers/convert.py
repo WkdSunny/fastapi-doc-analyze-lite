@@ -3,12 +3,14 @@
 This module defines the conversion routes for the FastAPI application.
 """
 
+import pdb
 import asyncio
 import filetype
 from celery.result import AsyncResult
 from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks
 from typing import List, Dict, Any
-from app.services.processors.pdf.pdf_tasks import process_pdf_task
+from pydantic import ValidationError
+from app.services.processors.pdf.pdf_tasks import process_pdf_task, process_pdf
 # from app.services.processors.pdf.pdf_tasks import simple_task
 from app.services.processors.pdf.textract import useTextract
 from app.services.processors.excel import useOpenPyXL
@@ -25,11 +27,13 @@ router = APIRouter(
 async def wait_for_celery_task(task, timeout):
     logger.info(f"Waiting for Celery task with ID: {task.id}, Type of task_id: {type(task.id)}")
     start_time = asyncio.get_event_loop().time()
+    # result = AsyncResult(task.id)
     while True:
-        # result = AsyncResult(task_id)
-        result = task.get()
+        result = await task.get()
         if result.ready():
+            # task_result = await result.get()
             task_result = result.result
+            logger.info(f"Task result: {task_result}")
             return task_result
         elif (asyncio.get_event_loop().time() - start_time) > timeout:
             raise TimeoutError("Celery task timed out")
@@ -48,6 +52,7 @@ async def wait_for_celery_task(task, timeout):
 #         raise HTTPException(status_code=500, detail=str(e))
 
 async def convert_files(files: List[UploadFile] = File(...)):
+    # pdb.set_trace()
     responses = []
     unsupported_files = []
     failed_files = []
@@ -70,7 +75,9 @@ async def convert_files(files: List[UploadFile] = File(...)):
 
             # Process file based on type
             if 'pdf' in content_type:
+                logger.info(f"PDF file detected...")
                 task = process_pdf_task.delay(s3_file_key)
+                # task = asyncio.create_task(process_pdf(s3_file_key))
             elif 'excel' in content_type or 'spreadsheetml' in content_type:
                 task = useOpenPyXL.delay(s3_file_key)
             elif 'wordprocessingml' in content_type or 'msword' in content_type:

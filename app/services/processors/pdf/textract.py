@@ -6,7 +6,8 @@ This module defines the PDF processing task using AWS Textract.
 from app.tasks.celery_config import app
 import asyncio
 from aiobotocore.session import AioSession
-from app.models.pdf_model import PDFTextResponse, BoundingBox
+# from app.models.pdf_model import PDFTextResponse, BoundingBox
+from app.models.pdf_model import BoundingBox
 from app.config import settings, logger
 
 @app.task
@@ -23,7 +24,7 @@ async def useTextract(documents):
     try:
         session = AioSession()
         logger.info("Processing PDFs with Textract")
-        logger.info(f"Creating Textract client with region: {settings.AWS_REGION}")
+        logger.info(f"Creating Textract client from region: {settings.AWS_REGION}")
         async with session.create_client('textract', region_name=settings.AWS_REGION,
                                                            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
                                                            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY) as client:
@@ -128,10 +129,20 @@ def process_result(result):
         text = extract_text(result)
         bounding_boxes = extract_bounding_boxes(result)
         logger.info("Processed Textract result")
-        return PDFTextResponse(file_name=result['DocumentLocation']['Name'], text=text, bounding_boxes=bounding_boxes).dict()
+        # return PDFTextResponse(file_name=result['DocumentLocation']['Name'], text=text, bounding_boxes=bounding_boxes).to_dict()
+        return {
+            "file_name": result['DocumentLocation']['Name'],
+            "text": text,
+            "bounding_boxes": [box.dict() for box in bounding_boxes]
+        }
     except Exception as e:
         logger.error(f"Failed to process result: {e}")
-        return PDFTextResponse(file_name=result['DocumentLocation']['Name'], text="", bounding_boxes=[]).dict()
+        # return PDFTextResponse(file_name=result['DocumentLocation']['Name'], text="", bounding_boxes=[]).to_dict()
+        return {
+            "file_name": result['DocumentLocation']['Name'],
+            "text": "",
+            "bounding_boxes": []
+        }
 
 def extract_text(result):
     """

@@ -13,7 +13,8 @@ from skimage.measure import label, regionprops
 from pdf2image import convert_from_path, exceptions as pdf_exceptions
 import pytesseract
 from app.config import logger
-from app.models.pdf_model import BoundingBox, PDFTextResponse
+# from app.models.pdf_model import BoundingBox, PDFTextResponse
+from app.models.pdf_model import BoundingBox
 
 async def deskew(image):
     """Deskew the given image based on text orientation."""
@@ -78,18 +79,38 @@ async def useTesseract(file_path):
         images = convert_from_path(file_path, dpi=300, fmt='jpeg')
     except pdf_exceptions.PDFInfoNotInstalledError as e:
         logger.error(f"PDFInfo not installed, cannot convert PDF: {e}")
-        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).dict()
+        # return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
+        return {
+            "file_name": file_path,
+            "text": "",
+            "bounding_boxes": []
+        }
     except pdf_exceptions.PDFPageCountError as e:
         logger.error(f"Cannot read page count: {e}")
-        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).dict()
+        # return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
+        return {
+            "file_name": file_path,
+            "text": "",
+            "bounding_boxes": []
+        }
     except Exception as e:
         logger.error(f"Failed to convert PDF to image: {e}")
-        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).dict()
+        # return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
+        return {
+            "file_name": file_path,
+            "text": "",
+            "bounding_boxes": []
+        }
 
     tasks = [process_image(image) for image in images]
     processed_images = await asyncio.gather(*tasks)
     results = await asyncio.gather(*(extract_text_and_boxes(image) for image in processed_images))
-    text_responses = PDFTextResponse(file_name=file_path, text="\n".join([box.text for result in results for box in result]), bounding_boxes=[box for result in results for box in result]).dict()
+    # text_responses = PDFTextResponse(file_name=file_path, text="\n".join([box.text for result in results for box in result]), bounding_boxes=[box for result in results for box in result]).to_dict()
+    text_responses = {
+        "file_name": file_path,
+        "text": "\n".join([box.text for result in results for box in result]),
+        "bounding_boxes": [box.dict() for result in results for box in result]
+    }
     return text_responses
 
 # Example usage:
