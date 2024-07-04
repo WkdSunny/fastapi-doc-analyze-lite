@@ -3,15 +3,12 @@
 This module defines the conversion routes for the FastAPI application.
 """
 
-import pdb
+import time
 import asyncio
 import filetype
-from celery.result import AsyncResult
 from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks
 from typing import List, Dict, Any
-from pydantic import ValidationError
-from app.services.processors.pdf.pdf_tasks import process_pdf_task, process_pdf
-# from app.services.processors.pdf.pdf_tasks import simple_task
+from app.services.processors.pdf.pdf_tasks import process_pdf
 from app.services.processors.pdf.textract import useTextract
 from app.services.processors.excel import useOpenPyXL
 from app.services.processors.word import useDocX
@@ -23,34 +20,21 @@ router = APIRouter(
     tags=["convert"]
 )
 
-# async def wait_for_celery_task(task_id, timeout):
-async def wait_for_celery_task(task, timeout):
+def wait_for_celery_task(task, timeout):
     logger.info(f"Waiting for Celery task with ID: {task.id}, Type of task_id: {type(task.id)}")
-    start_time = asyncio.get_event_loop().time()
-    # result = AsyncResult(task.id)
+    # start_time = asyncio.get_event_loop().time()
+    start_time = time.time()
     while True:
-        result = await task.get()
-        if result.ready():
-            # task_result = await result.get()
-            task_result = result.result
-            logger.info(f"Task result: {task_result}")
-            return task_result
+        if task.ready():
+            result = task.result
+            logger.info(f"Task result: {result}")
+            return result
         elif (asyncio.get_event_loop().time() - start_time) > timeout:
             raise TimeoutError("Celery task timed out")
-        await asyncio.sleep(1)  # Sleep for a short period to avoid busy waiting
+        # asyncio.sleep(1)  # Sleep for a short period to avoid busy waiting
+        time.sleep(1)
 
 @router.post("/", response_model=Dict[str, Any])
-# async def convert_files():
-#     try:
-#         task = simple_task.delay()
-#         logger.info(f"Queued task: {task.id}")  # Log task ID
-#         result = await wait_for_celery_task(task.id, 15)
-#         logger.info(f"Task result: {result}")
-#         return {"status": "success", "result": result}
-#     except Exception as e:
-#         logger.error(f"Failed to execute task: {e}")
-#         raise HTTPException(status_code=500, detail=str(e))
-
 async def convert_files(files: List[UploadFile] = File(...)):
     # pdb.set_trace()
     responses = []
@@ -76,7 +60,7 @@ async def convert_files(files: List[UploadFile] = File(...)):
             # Process file based on type
             if 'pdf' in content_type:
                 logger.info(f"PDF file detected...")
-                task = process_pdf_task.delay(s3_file_key)
+                task = process_pdf.delay(s3_file_key)
                 # task = asyncio.create_task(process_pdf(s3_file_key))
             elif 'excel' in content_type or 'spreadsheetml' in content_type:
                 task = useOpenPyXL.delay(s3_file_key)
@@ -90,9 +74,10 @@ async def convert_files(files: List[UploadFile] = File(...)):
                 logger.error(f"Unsupported file type: {file.filename}")
                 continue
 
-            result = await wait_for_celery_task(task, 180)
+            result = wait_for_celery_task(task, 180)
             success_files.append(file.filename)
-            responses.append({"filename": file.filename, "response": result})
+            # responses.append({"filename": file.filename, "response": result})
+            responses.append(result)
         except Exception as e:
             failed_files.append(file.filename)
             logger.error(f"Failed to process file {file.filename}: {e}")

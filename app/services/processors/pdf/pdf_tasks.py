@@ -4,8 +4,8 @@ This module defines the PDF processing tasks for the FastAPI application.
 
 import io
 import fitz  # PyMuPDF
+import time
 import asyncio
-import aiofiles
 import functools
 from celery import shared_task
 from app.tasks.aws_services import download_file_from_s3
@@ -36,7 +36,7 @@ async def has_images(file_stream):
         return False
 
 @shared_task
-def process_pdf_task(s3_file_key):
+def process_pdf(s3_file_key):
     """
     Process PDF files based on type and handle fallbacks.
 
@@ -48,13 +48,26 @@ def process_pdf_task(s3_file_key):
     """
     loop = asyncio.get_event_loop()
     if loop.is_running():
-        future = asyncio.run_coroutine_threadsafe(process_pdf(s3_file_key), loop)
+        future = asyncio.run_coroutine_threadsafe(_process_pdf(s3_file_key), loop)
         return future.result()
     else:
-        return loop.run_until_complete(process_pdf(s3_file_key))
+        return loop.run_until_complete(_process_pdf(s3_file_key))
 
-@shared_task
-async def process_pdf(s3_file_key):
+def wait_for_celery_task(task, timeout):
+    logger.info(f"Waiting for Celery task with ID: {task.id}, Type of task_id: {type(task.id)}")
+    # start_time = asyncio.get_event_loop().time()
+    start_time = time.time()
+    while True:
+        if task.ready():
+            result = task.result
+            logger.info(f"Task result: {result}")
+            return result
+        elif (asyncio.get_event_loop().time() - start_time) > timeout:
+            raise TimeoutError("Celery task timed out")
+        # asyncio.sleep(1)  # Sleep for a short period to avoid busy waiting
+        time.sleep(1)
+
+async def _process_pdf(s3_file_key):
     """
     Process PDF files based on type and handle fallbacks.
 
@@ -74,31 +87,36 @@ async def process_pdf(s3_file_key):
 
         # Check if the PDF has images
         has_img = await has_images(file_stream)
-        if has_img:
-            logger.info(f"PDF with images detected: {s3_file_key}")
-            # response = await asyncio.to_thread(functools.partial(textract.useTextract, [{'Bucket': settings.AWS_S3_BUCKET_NAME, 'Name': s3_file_key}]))
-            response = await textract.useTextract([{'Bucket': settings.AWS_S3_BUCKET_NAME, 'Name': s3_file_key}])
-            if not response.bounding_boxes:
-                file_stream.seek(0)  # Reset the stream position
-                async with aiofiles.open(file_path, 'wb') as f:
-                    await f.write(file_stream.getbuffer())
-                response = await tesseract.useTesseract(file_path)
-        else:
-            logger.info(f"Text-based PDF detected: {s3_file_key}")
-            file_stream.seek(0)  # Reset the stream position
-            async with aiofiles.open(file_path, 'wb') as f:
-                await f.write(file_stream.getbuffer())
-            response = await pdf_miner.usePDFMiner(file_path)
-            if not response.bounding_boxes:
-                response = await pyPDF2.usePyPDF2(file_path)
-                if not response.bounding_boxes:
-                    response = await muPDF.usePyMuPDF(file_path)
+        # if has_img:
+        print(f"Pdf has images: {has_img}")
+        # logger.info(f"PDF with images detected: {s3_file_key}")
+        # response = await asyncio.to_thread(functools.partial(textract.useTextract, [{'Bucket': settings.AWS_S3_BUCKET_NAME, 'Name': s3_file_key}]))
+        task = textract.useTextract.delay([{'Bucket': settings.AWS_S3_BUCKET_NAME, 'Name': s3_file_key}])
+            # response = await textract.useTextract([{'Bucket': settings.AWS_S3_BUCKET_NAME, 'Name': s3_file_key}])
+        #     if not response.bounding_boxes:
+        #         file_stream.seek(0)  # Reset the stream position
+        #         async with aiofiles.open(file_path, 'wb') as f:
+        #             await f.write(file_stream.getbuffer())
+        #         response = await tesseract.useTesseract(file_path)
+        # else:
+        #     logger.info(f"Text-based PDF detected: {s3_file_key}")
+        #     file_stream.seek(0)  # Reset the stream position
+        #     async with aiofiles.open(file_path, 'wb') as f:
+        #         await f.write(file_stream.getbuffer())
+        #     response = await pdf_miner.usePDFMiner(file_path)
+        #     if not response.bounding_boxes:
+        #         response = await pyPDF2.usePyPDF2(file_path)
+        #         if not response.bounding_boxes:
+        #             response = await muPDF.usePyMuPDF(file_path)
+
+        response = wait_for_celery_task(task, 180)
+        # print(f'Response from Textract: {response}')
 
         return response
     except Exception as e:
         logger.error(f"Failed to process PDF {s3_file_key} with error: {e}")
         return {
-            "file_name": s3_file_key,
+            "file_name": "",
             "text": "",
             "bounding_boxes": []
         }

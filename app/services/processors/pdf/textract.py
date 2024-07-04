@@ -6,12 +6,33 @@ This module defines the PDF processing task using AWS Textract.
 from app.tasks.celery_config import app
 import asyncio
 from aiobotocore.session import AioSession
-# from app.models.pdf_model import PDFTextResponse, BoundingBox
+from app.models.pdf_model import PDFTextResponse, BoundingBox, coordinates
 from app.models.pdf_model import BoundingBox
 from app.config import settings, logger
 
 @app.task
-async def useTextract(documents):
+def useTextract(documents):
+    """
+    Process PDFs with AWS Textract.
+
+    Args:
+    documents (list): List of S3 document locations.
+
+    Returns:
+    list: List of PDFTextResponse objects.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(_useTextract(documents), loop)
+            return future.result()
+        else:
+            return loop.run_until_complete(_useTextract(documents))
+    except Exception as e:
+        logger.error(f"Failed to process PDFs with Textract: {e}")
+        return []  # Return empty list or handle as needed
+    
+async def _useTextract(documents):
     """
     Process PDFs with AWS Textract.
 
@@ -30,7 +51,7 @@ async def useTextract(documents):
                                                            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY) as client:
             job_ids = await submit_documents(client, documents)
             results = await get_results(client, job_ids)
-            responses = [process_result(result) for result in results]
+            responses = [process_result(result, doc['Name']) for result, doc in zip(results, documents)]
             logger.info("Processed all PDFs with Textract")
             return responses
     except Exception as e:
@@ -118,7 +139,7 @@ async def get_document_text(client, job_id):
     logger.info(f"Retrieved document text detection result for Job ID {job_id}")
     return response
 
-def process_result(result):
+def process_result(result, docName):
     """
     Process Textract result.
 
@@ -131,21 +152,12 @@ def process_result(result):
     try:
         text = extract_text(result)
         bounding_boxes = extract_bounding_boxes(result)
+        cleaned_filename = '_'.join(docName.split('_')[1:])
         logger.info("Processed Textract result")
-        # return PDFTextResponse(file_name=result['DocumentLocation']['Name'], text=text, bounding_boxes=bounding_boxes).to_dict()
-        return {
-            "file_name": result['DocumentLocation']['Name'],
-            "text": text,
-            "bounding_boxes": [box.dict() for box in bounding_boxes]
-        }
+        return PDFTextResponse(file_name=cleaned_filename, text=text, bounding_boxes=bounding_boxes).to_dict()
     except Exception as e:
         logger.error(f"Failed to process result: {e}")
-        # return PDFTextResponse(file_name=result['DocumentLocation']['Name'], text="", bounding_boxes=[]).to_dict()
-        return {
-            "file_name": result['DocumentLocation']['Name'],
-            "text": "",
-            "bounding_boxes": []
-        }
+        return PDFTextResponse(file_name=cleaned_filename, text="", bounding_boxes=[]).to_dict()
 
 def extract_text(result):
     """
@@ -178,10 +190,15 @@ def extract_bounding_boxes(result):
         logger.info("Extracting bounding boxes from Textract result")
         return [
             BoundingBox(
-                page=1,  # Assuming all text is from the first page
-                bbox=[block['Geometry']['BoundingBox']['Left'], block['Geometry']['BoundingBox']['Top'],
-                      block['Geometry']['BoundingBox']['Width'], block['Geometry']['BoundingBox']['Height']],
-                text=block['Text']
+                page = block['Page'] if 'Page' in block else 1,
+                bbox=coordinates(
+                    left=block['Geometry']['BoundingBox']['Left'],
+                    top=block['Geometry']['BoundingBox']['Top'],
+                    width=block['Geometry']['BoundingBox']['Width'],
+                    height=block['Geometry']['BoundingBox']['Height']
+                ),
+                text=block['Text'],
+                confidence=block['Confidence']
             ) for block in result['Blocks'] if block['BlockType'] == 'LINE'
         ]
     except Exception as e:
