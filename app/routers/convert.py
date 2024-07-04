@@ -22,7 +22,6 @@ router = APIRouter(
 
 def wait_for_celery_task(task, timeout):
     logger.info(f"Waiting for Celery task with ID: {task.id}, Type of task_id: {type(task.id)}")
-    # start_time = asyncio.get_event_loop().time()
     start_time = time.time()
     while True:
         if task.ready():
@@ -31,7 +30,6 @@ def wait_for_celery_task(task, timeout):
             return result
         elif (asyncio.get_event_loop().time() - start_time) > timeout:
             raise TimeoutError("Celery task timed out")
-        # asyncio.sleep(1)  # Sleep for a short period to avoid busy waiting
         time.sleep(1)
 
 @router.post("/", response_model=Dict[str, Any])
@@ -55,13 +53,12 @@ async def convert_files(files: List[UploadFile] = File(...)):
             # Upload the file to S3
             temp_filename = await upload_file_to_s3(file)
             logger.info(f"Uploaded to S3 with temp filename: {temp_filename}")
-            s3_file_key = temp_filename  # Assuming temp_filename is the key
+            s3_file_key = temp_filename
 
             # Process file based on type
             if 'pdf' in content_type:
                 logger.info(f"PDF file detected...")
                 task = process_pdf.delay(s3_file_key)
-                # task = asyncio.create_task(process_pdf(s3_file_key))
             elif 'excel' in content_type or 'spreadsheetml' in content_type:
                 task = useOpenPyXL.delay(s3_file_key)
             elif 'wordprocessingml' in content_type or 'msword' in content_type:
@@ -76,7 +73,6 @@ async def convert_files(files: List[UploadFile] = File(...)):
 
             result = wait_for_celery_task(task, 180)
             success_files.append(file.filename)
-            # responses.append({"filename": file.filename, "response": result})
             responses.append(result)
         except Exception as e:
             failed_files.append(file.filename)
@@ -92,3 +88,15 @@ async def convert_files(files: List[UploadFile] = File(...)):
         "conversion_failed": failed_files,
         "result": responses
     }
+
+# Example usage:
+if __name__ == "__main__":
+    files = [
+        UploadFile(filename="sample.pdf", content_type="application/pdf"),
+        UploadFile(filename="sample.xlsx", content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        UploadFile(filename="sample.docx", content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        UploadFile(filename="sample.jpg", content_type="image/jpeg"),
+        UploadFile(filename="sample.txt", content_type="text/plain")
+    ]
+    results = asyncio.run(convert_files(files))
+    print(results)

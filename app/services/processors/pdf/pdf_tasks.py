@@ -3,7 +3,7 @@ This module defines the PDF processing tasks for the FastAPI application.
 """
 
 import io
-import fitz  # PyMuPDF
+import fitz
 import time
 import asyncio
 import functools
@@ -55,7 +55,6 @@ def process_pdf(s3_file_key):
 
 def wait_for_celery_task(task, timeout):
     logger.info(f"Waiting for Celery task with ID: {task.id}, Type of task_id: {type(task.id)}")
-    # start_time = asyncio.get_event_loop().time()
     start_time = time.time()
     while True:
         if task.ready():
@@ -64,7 +63,6 @@ def wait_for_celery_task(task, timeout):
             return result
         elif (asyncio.get_event_loop().time() - start_time) > timeout:
             raise TimeoutError("Celery task timed out")
-        # asyncio.sleep(1)  # Sleep for a short period to avoid busy waiting
         time.sleep(1)
 
 async def _process_pdf(s3_file_key):
@@ -110,7 +108,6 @@ async def _process_pdf(s3_file_key):
         #             response = await muPDF.usePyMuPDF(file_path)
 
         response = wait_for_celery_task(task, 180)
-        # print(f'Response from Textract: {response}')
 
         return response
     except Exception as e:

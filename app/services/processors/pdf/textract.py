@@ -30,7 +30,7 @@ def useTextract(documents):
             return loop.run_until_complete(_useTextract(documents))
     except Exception as e:
         logger.error(f"Failed to process PDFs with Textract: {e}")
-        return []  # Return empty list or handle as needed
+        return []
     
 async def _useTextract(documents):
     """
@@ -56,7 +56,7 @@ async def _useTextract(documents):
             return responses
     except Exception as e:
         logger.error(f"Failed to process PDFs with Textract: {e}")
-        return []  # Return empty list or handle as needed
+        return []
 
 async def submit_documents(client, documents):
     """
