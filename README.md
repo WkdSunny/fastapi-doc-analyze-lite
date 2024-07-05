@@ -56,7 +56,18 @@ fastapi-iac-py
 
 # Deployment Instruction
 1. Git clone
-2. pip install -r requirements.txt
+2. Install Popplar
+  2.1. For Windows:
+    2.1.1. Goto GitHub - https://github.com/oschwartz10612/poppler-windows
+    2.1.2. Download ZIP
+    2.1.3. Extract to a location of your choice, preferrably
+      2.1.3.1. C:\Progam Files\
+    2.1.4. Add C:\Program Files\poppler-<0.68.0_x86>\bin (Text inside <> refers to version number it may differ upon the ZIP file you extracted) to your system PATH by doing the following: Click on the Windows start button, search for Edit the system environment variables, click on Environment Variables..., under System variables, look for and double-click on PATH, click on New, then add C:\Users\Program Files\poppler-0.68.0_x86\bin, click OK.
+    2.1.5. If you are using a terminal to execute poppler (e.g. running pdf2image in command line), you may need to reopen your terminal for poppler to work.
+  2.2. For MAC: brew install poppler
+  2.3. For Linux: sudo apt-get install poppler-utils
+
+3. pip install -r requirements.txt
 
 # Starting the Server
 1. Install Redis

@@ -1,10 +1,12 @@
-# async_utils.py
+# /app/utils/async_utils.py
 """
 This module defines utility functions for running asynchronous tasks in a synchronous context.
 """
 
 import asyncio
+from celery import shared_task
 
+@shared_task
 def run_async_task(async_func, *args):
     """
     Run an asynchronous task in a synchronous context, suitable for Celery tasks.

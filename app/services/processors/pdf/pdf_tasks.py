@@ -1,3 +1,4 @@
+# app/services/processors/pdf/pdf_tasks.py
 """
 This module defines the PDF processing tasks for the FastAPI application.
 """
@@ -26,7 +27,7 @@ def process_pdf(temp_path):
         return results
     except Exception as e:
         logger.error(f"Failed to process PDF {temp_path} with error: {e}")
-        return pdf_miner.PDFTextResponse(file_name=temp_path, text="", bounding_boxes=[]).to_dict()
+        return PDFTextResponse(file_name=temp_path, text="", bounding_boxes=[]).to_dict()
 
 async def process_with_fallbacks(file_path, processors):
     """
@@ -44,11 +45,11 @@ async def process_with_fallbacks(file_path, processors):
             logger.info(f"Trying processor {processor.__name__} for {file_path}")
             task = processor.delay(file_path)
             response = await wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT)
-            if response.bounding_boxes:
+            if response['bounding_boxes']:
                 return response
         except Exception as e:
             logger.error(f"Processor {processor.__name__} failed for {file_path} with error: {e}")
-    return {"file_name": "", "text": "", "bounding_boxes": []}
+    return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
 
 async def _process_pdf(temp_path):
     """
@@ -67,15 +68,12 @@ async def _process_pdf(temp_path):
         processors = [muPDF.usePyMuPDF, pdf_miner.usePDFMiner, textract.useTextract, tesseract.useTesseract]
 
         response = await process_with_fallbacks(temp_path, processors)
+        logger.info(f"Processing result: {response}")
         return response
 
     except Exception as e:
         logger.error(f"Failed to process PDF {temp_path} with error: {e}")
-        return {
-            "file_name": "",
-            "text": "",
-            "bounding_boxes": []
-        }
+        return PDFTextResponse(file_name="", text="", bounding_boxes=[]).to_dict()
 
 # Example usage:
 if __name__ == "__main__":

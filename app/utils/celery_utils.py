@@ -4,9 +4,11 @@ This module defines utility functions for celery to be used in the FastAPI appli
 """
 
 import asyncio
+from celery import shared_task
 from celery.result import AsyncResult
 from app.config import logger
 
+@shared_task
 async def wait_for_celery_task(task_id, timeout):
     """
     Wait for a Celery task to complete within a given timeout.
@@ -22,16 +24,13 @@ async def wait_for_celery_task(task_id, timeout):
     TimeoutError: If the task does not complete within the timeout.
     """
     task = AsyncResult(task_id)
-    try:
-        result = await asyncio.to_thread(task.get, timeout=timeout)
-        logger.info(f"Task result: {result}")
-        return result
-    except TimeoutError:
-        logger.error("Celery task timed out")
-        raise
-    except Exception as e:
-        logger.error(f"Error waiting for Celery task: {e}")
-        raise
+    start_time = asyncio.get_event_loop().time()
+    while not task.ready():
+        if (asyncio.get_event_loop().time() - start_time) > timeout:
+            raise TimeoutError("Celery task timed out")
+        await asyncio.sleep(1)
+    logger.info(f"Task result: {task.result}")
+    return task.result
 
 # Example usage:
 if __name__ == "__main__":
