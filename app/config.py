@@ -15,6 +15,7 @@ class Settings:
     CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
     BEARER_TOKEN = os.getenv("API_TOKEN")
     REDIS_URL = os.getenv("REDIS_URL")
+    PDF_PROCESSING_TIMEOUT = int(os.getenv("PDF_PROCESSING_TIMEOUT", 180))  # Default to 180 seconds
 
     # Define the path for log files
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Gets the directory where the script resides

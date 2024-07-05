@@ -8,6 +8,7 @@ import asyncio
 from aiobotocore.session import AioSession
 from app.models.pdf_model import PDFTextResponse, BoundingBox, coordinates
 from app.config import settings, logger
+from app.utils.async_utils import run_async_task
 from app.tasks.aws_services import upload_file_to_s3
 
 @shared_task
@@ -22,15 +23,11 @@ def useTextract(file_path):
     list: List of PDFTextResponse objects.
     """
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            future = asyncio.run_coroutine_threadsafe(_useTextract(file_path), loop)
-            return future.result()
-        else:
-            return loop.run_until_complete(_useTextract(file_path))
+        results = run_async_task(_useTextract, file_path)
+        return results
     except Exception as e:
         logger.error(f"Failed to process PDFs with Textract: {e}")
-        return []
+        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
 
 async def _useTextract(file_path):
     """

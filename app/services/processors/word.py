@@ -1,15 +1,18 @@
+# word.py
 """
 This module defines the Word processing task using python-docx.
 """
 
-from app.tasks.celery_config import app
-from docx import Document
 import json
-from app.config import logger
 import asyncio
+from docx import Document
+from celery import shared_task
+from app.config import logger
+from app.utils.async_utils import run_async_task
 
-@app.task
-async def useDocX(file_path):
+
+@shared_task
+def useDocX(file_path):
     """
     Asynchronously processes a Word document and converts it to JSON format.
 
@@ -19,6 +22,14 @@ async def useDocX(file_path):
     Returns:
     str: JSON string representation of the Word document's paragraphs.
     """
+    try:
+        result = run_async_task(_useDocX, file_path)
+        return result
+    except Exception as e:
+        logger.error(f"Failed to process Word file {file_path}: {e}")
+        return json.dumps({'paragraphs': []})  # Return empty paragraphs list in case of failure
+
+async def _useDocX(file_path):
     try:
         # Use asyncio.to_thread to run the blocking operation in a separate thread
         document = await asyncio.to_thread(Document, file_path)

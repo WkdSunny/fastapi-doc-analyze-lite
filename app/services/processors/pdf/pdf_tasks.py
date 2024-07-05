@@ -1,16 +1,14 @@
-# pdf_tasks.py
 """
 This module defines the PDF processing tasks for the FastAPI application.
 """
 
-import fitz
 import asyncio
 from celery import shared_task
-from celery.result import AsyncResult
-from app.services.processors.pdf import textract, tesseract, pdf_miner, pyPDF2, muPDF
 from app.config import settings, logger
-
-PDF_PROCESSING_TIMEOUT = 180  # seconds
+from app.models.pdf_model import PDFTextResponse
+from app.utils.async_utils import run_async_task
+from app.utils.celery_utils import wait_for_celery_task
+from app.services.processors.pdf import textract, tesseract, pdf_miner, muPDF
 
 @shared_task
 def process_pdf(temp_path):
@@ -23,38 +21,12 @@ def process_pdf(temp_path):
     Returns:
     PDFTextResponse: Contains the file name, concatenated text, and bounding boxes.
     """
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
-        future = asyncio.run_coroutine_threadsafe(_process_pdf(temp_path), loop)
-        return future.result()
-    else:
-        return loop.run_until_complete(_process_pdf(temp_path))
-
-async def wait_for_celery_task(task_id, timeout):
-    """
-    Wait for a Celery task to complete within a given timeout.
-
-    Args:
-    task_id (str): The ID of the Celery task.
-    timeout (int): The maximum time to wait in seconds.
-
-    Returns:
-    result: The result of the Celery task.
-
-    Raises:
-    TimeoutError: If the task does not complete within the timeout.
-    """
-    task = AsyncResult(task_id)
     try:
-        result = await asyncio.to_thread(task.get, timeout=timeout)
-        logger.info(f"Task result: {result}")
-        return result
-    except TimeoutError:
-        logger.error("Celery task timed out")
-        raise
+        results = run_async_task(_process_pdf, temp_path)
+        return results
     except Exception as e:
-        logger.error(f"Error waiting for Celery task: {e}")
-        raise
+        logger.error(f"Failed to process PDF {temp_path} with error: {e}")
+        return pdf_miner.PDFTextResponse(file_name=temp_path, text="", bounding_boxes=[]).to_dict()
 
 async def process_with_fallbacks(file_path, processors):
     """
@@ -71,7 +43,7 @@ async def process_with_fallbacks(file_path, processors):
         try:
             logger.info(f"Trying processor {processor.__name__} for {file_path}")
             task = processor.delay(file_path)
-            response = await wait_for_celery_task(task.id, PDF_PROCESSING_TIMEOUT)
+            response = await wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT)
             if response.bounding_boxes:
                 return response
         except Exception as e:

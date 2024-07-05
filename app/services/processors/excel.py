@@ -1,15 +1,16 @@
+# excel.py
 """
 This module defines the Excel processing task using OpenPyXL.
 """
-
-from app.tasks.celery_config import app
-import openpyxl
 import json
-from app.config import logger
 import asyncio
+import openpyxl
+from celery import shared_task
+from app.config import logger
+from app.utils.async_utils import run_async_task
 
-@app.task
-async def useOpenPyXL(file_path):
+@shared_task
+def useOpenPyXL(file_path):
     """
     Asynchronously processes an Excel file and converts it to JSON format.
 
@@ -19,6 +20,14 @@ async def useOpenPyXL(file_path):
     Returns:
     str: JSON string representation of the Excel data.
     """
+    try:
+        result = run_async_task(_useOpenPyXL, file_path)
+        return result
+    except Exception as e:
+        logger.error(f"Failed to process Excel file {file_path}: {e}")
+        return json.dumps([])  # Return empty JSON array in case of failure
+
+async def _useOpenPyXL(file_path):
     try:
         # Use asyncio.to_thread to run the blocking operation in a separate thread
         workbook = await asyncio.to_thread(openpyxl.load_workbook, file_path)
@@ -31,9 +40,7 @@ async def useOpenPyXL(file_path):
         headers = data[0]
         json_data = []
         for row in data[1:]:
-            json_row = {}
-            for i, value in enumerate(row):
-                json_row[headers[i]] = value
+            json_row = {headers[i]: value for i, value in enumerate(row)}
             json_data.append(json_row)
 
         return json.dumps(json_data)

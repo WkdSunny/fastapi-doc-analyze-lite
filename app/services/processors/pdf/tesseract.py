@@ -3,18 +3,18 @@
 This module defines the Tesseract OCR processing task for PDF files.
 """
 
-from app.tasks.celery_config import app
+import cv2
 import asyncio
 import numpy as np
-import cv2
+import pytesseract
 from PIL import Image
+from celery import shared_task
 from skimage.transform import rotate
 from skimage.measure import label, regionprops
 from pdf2image import convert_from_path, exceptions as pdf_exceptions
-import pytesseract
 from app.config import logger
-# from app.models.pdf_model import BoundingBox, PDFTextResponse
-from app.models.pdf_model import BoundingBox
+from app.utils.async_utils import run_async_task
+from app.models.pdf_model import BoundingBox, PDFTextResponse, coordinates
 
 async def deskew(image):
     """Deskew the given image based on text orientation."""
@@ -55,8 +55,14 @@ async def extract_text_and_boxes(image):
         text_and_boxes = [
             BoundingBox(
                 page=int(ocr_data['page_num'][i]),
-                bbox=[ocr_data['left'][i], ocr_data['top'][i], ocr_data['width'][i], ocr_data['height'][i]],
-                text=ocr_data['text'][i].strip()
+                bbox=coordinates(
+                    left=float(ocr_data['left'][i]),
+                    top=float(ocr_data['top'][i]),
+                    width=float(ocr_data['width'][i]),
+                    height=float(ocr_data['height'][i])
+                ),
+                text=ocr_data['text'][i].strip(),
+                confidence=float(ocr_data['conf'][i])
             ) for i in range(len(ocr_data['text'])) if int(ocr_data['conf'][i]) > 60 and ocr_data['text'][i].strip()
         ]
         return text_and_boxes
@@ -64,8 +70,8 @@ async def extract_text_and_boxes(image):
         logger.error(f"Failed to extract text and bounding boxes: {e}")
         return []
 
-@app.task
-async def useTesseract(file_path):
+@shared_task
+def useTesseract(file_path):
     """
     Process a PDF file to extract text using OCR.
 
@@ -73,45 +79,38 @@ async def useTesseract(file_path):
     file_path (str): The path to the PDF file to be processed.
 
     Returns:
-    PDFTextResponse: Contains the file name, concatenated text, and bounding boxes.
+    dict: Contains the file name, concatenated text, and bounding boxes.
     """
+    try:
+        result = run_async_task(_useTesseract, file_path)
+        return result
+    except Exception as e:
+        logger.error(f"Failed to process PDFs with Tesseract: {e}")
+        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
+
+async def _useTesseract(file_path):
     try:
         images = convert_from_path(file_path, dpi=300, fmt='jpeg')
     except pdf_exceptions.PDFInfoNotInstalledError as e:
         logger.error(f"PDFInfo not installed, cannot convert PDF: {e}")
-        # return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
-        return {
-            "file_name": file_path,
-            "text": "",
-            "bounding_boxes": []
-        }
+        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
     except pdf_exceptions.PDFPageCountError as e:
         logger.error(f"Cannot read page count: {e}")
-        # return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
-        return {
-            "file_name": file_path,
-            "text": "",
-            "bounding_boxes": []
-        }
+        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
     except Exception as e:
         logger.error(f"Failed to convert PDF to image: {e}")
-        # return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
-        return {
-            "file_name": file_path,
-            "text": "",
-            "bounding_boxes": []
-        }
+        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
 
     tasks = [process_image(image) for image in images]
     processed_images = await asyncio.gather(*tasks)
     results = await asyncio.gather(*(extract_text_and_boxes(image) for image in processed_images))
-    # text_responses = PDFTextResponse(file_name=file_path, text="\n".join([box.text for result in results for box in result]), bounding_boxes=[box for result in results for box in result]).to_dict()
-    text_responses = {
-        "file_name": file_path,
-        "text": "\n".join([box.text for result in results for box in result]),
-        "bounding_boxes": [box.dict() for result in results for box in result]
-    }
-    return text_responses
+
+    response = PDFTextResponse(
+        file_name=file_path,
+        text="\n".join([box.text for result in results for box in result]),
+        bounding_boxes=[box for result in results for box in result]
+    )
+    return response.to_dict()
 
 # Example usage:
 if __name__ == "__main__":

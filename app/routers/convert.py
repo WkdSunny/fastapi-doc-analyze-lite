@@ -1,36 +1,25 @@
+# convert.py
 """
 This module defines the conversion routes for the FastAPI application.
 """
 
-import time
 import asyncio
 import aiofiles
 import filetype
-from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks
 from typing import List, Dict, Any
-from app.services.processors.pdf.pdf_tasks import process_pdf
-from app.services.processors.pdf.textract import useTextract
-from app.services.processors.excel import useOpenPyXL
-from app.services.processors.word import useDocX
-# from app.tasks.aws_services import upload_file_to_s3
+from celery.result import AsyncResult
+from fastapi import APIRouter, File, UploadFile, HTTPException
 from app.config import settings, logger
+from app.services.processors.word import useDocX
+from app.services.processors.excel import useOpenPyXL
+from app.utils.celery_utils import wait_for_celery_task
+from app.services.processors.pdf.textract import useTextract
+from app.services.processors.pdf.pdf_tasks import process_pdf
 
 router = APIRouter(
     prefix="/convert",
     tags=["convert"]
 )
-
-def wait_for_celery_task(task, timeout):
-    logger.info(f"Waiting for Celery task with ID: {task.id}, Type of task_id: {type(task.id)}")
-    start_time = time.time()
-    while True:
-        if task.ready():
-            result = task.result
-            logger.info(f"Task result: {result}")
-            return result
-        elif (time.time() - start_time) > timeout:
-            raise TimeoutError("Celery task timed out")
-        time.sleep(1)
 
 async def save_temp_file(file: UploadFile) -> str:
     """
@@ -83,7 +72,7 @@ async def convert_files(files: List[UploadFile] = File(...)):
                 logger.error(f"Unsupported file type: {file.filename}")
                 continue
 
-            result = wait_for_celery_task(task, 180)
+            result = await wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT)
             success_files.append(file.filename)
             responses.append(result)
         except Exception as e:
