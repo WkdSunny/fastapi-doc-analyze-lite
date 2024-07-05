@@ -3,20 +3,20 @@
 This module defines the PDF processing task using AWS Textract.
 """
 
-from app.tasks.celery_config import app
+from celery import shared_task
 import asyncio
 from aiobotocore.session import AioSession
 from app.models.pdf_model import PDFTextResponse, BoundingBox, coordinates
-from app.models.pdf_model import BoundingBox
 from app.config import settings, logger
+from app.tasks.aws_services import upload_file_to_s3
 
-@app.task
-def useTextract(documents):
+@shared_task
+def useTextract(file_path):
     """
     Process PDFs with AWS Textract.
 
     Args:
-    documents (list): List of S3 document locations.
+    file_path (str): The path to the PDF file.
 
     Returns:
     list: List of PDFTextResponse objects.
@@ -24,31 +24,38 @@ def useTextract(documents):
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
-            future = asyncio.run_coroutine_threadsafe(_useTextract(documents), loop)
+            future = asyncio.run_coroutine_threadsafe(_useTextract(file_path), loop)
             return future.result()
         else:
-            return loop.run_until_complete(_useTextract(documents))
+            return loop.run_until_complete(_useTextract(file_path))
     except Exception as e:
         logger.error(f"Failed to process PDFs with Textract: {e}")
         return []
-    
-async def _useTextract(documents):
+
+async def _useTextract(file_path):
     """
     Process PDFs with AWS Textract.
 
     Args:
-    documents (list): List of S3 document locations.
+    file_path (str): The path to the PDF file.
 
     Returns:
     list: List of PDFTextResponse objects.
     """
     try:
-        session = AioSession()
         logger.info("Processing PDFs with Textract")
-        logger.info(f"Creating Textract client from region: {settings.AWS_REGION}")
+        
+        # Upload file to S3
+        s3_file_key = await upload_file_to_s3(file_path)
+        logger.info(f"Uploaded file to S3 with key: {s3_file_key}")
+        
+        # Prepare the document reference for Textract
+        documents = [{'Bucket': settings.AWS_S3_BUCKET_NAME, 'Name': s3_file_key}]
+        
+        session = AioSession()
         async with session.create_client('textract', region_name=settings.AWS_REGION,
-                                                           aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-                                                           aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY) as client:
+                                         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                                         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY) as client:
             job_ids = await submit_documents(client, documents)
             results = await get_results(client, job_ids)
             responses = [process_result(result, doc['Name']) for result, doc in zip(results, documents)]
@@ -110,15 +117,14 @@ async def get_results(client, job_ids):
     Returns:
     list: List of Textract responses.
     """
-    results = []
-    for job_id in job_ids:
-        try:
-            results.append(await get_document_text(client, job_id))
-            logger.info(f"Retrieved document text for Job ID {job_id}")
-        except Exception as e:
-            logger.error(f"Failed to retrieve document text for Job ID {job_id}: {e}")
-    logger.info("Retrieved all document text detection results")
-    return results
+    try:
+        tasks = [get_document_text(client, job_id) for job_id in job_ids]
+        results = await asyncio.gather(*tasks)
+        logger.info("Retrieved all document text detection results")
+        return results
+    except Exception as e:
+        logger.error(f"Error retrieving document text detection results: {e}")
+        raise
 
 async def get_document_text(client, job_id):
     """
@@ -131,20 +137,25 @@ async def get_document_text(client, job_id):
     Returns:
     dict: Textract response.
     """
-    while True:
-        response = await client.get_document_text_detection(JobId=job_id)
-        if response['JobStatus'] in ['SUCCEEDED', 'FAILED']:
-            break
-        await asyncio.sleep(5)  # Reduce frequency of checks to avoid rate limits
-    logger.info(f"Retrieved document text detection result for Job ID {job_id}")
-    return response
+    try:
+        while True:
+            response = await client.get_document_text_detection(JobId=job_id)
+            if response['JobStatus'] in ['SUCCEEDED', 'FAILED']:
+                break
+            await asyncio.sleep(5)  # Reduce frequency of checks to avoid rate limits
+        logger.info(f"Retrieved document text detection result for Job ID {job_id}")
+        return response
+    except Exception as e:
+        logger.error(f"Failed to retrieve document text for Job ID {job_id}: {e}")
+        raise
 
-def process_result(result, docName):
+def process_result(result, doc_name):
     """
     Process Textract result.
 
     Args:
     result (dict): Textract response.
+    doc_name (str): Document name.
 
     Returns:
     PDFTextResponse: Processed result.
@@ -152,7 +163,7 @@ def process_result(result, docName):
     try:
         text = extract_text(result)
         bounding_boxes = extract_bounding_boxes(result)
-        cleaned_filename = '_'.join(docName.split('_')[1:])
+        cleaned_filename = '_'.join(doc_name.split('_')[1:])
         logger.info("Processed Textract result")
         return PDFTextResponse(file_name=cleaned_filename, text=text, bounding_boxes=bounding_boxes).to_dict()
     except Exception as e:
@@ -190,7 +201,7 @@ def extract_bounding_boxes(result):
         logger.info("Extracting bounding boxes from Textract result")
         return [
             BoundingBox(
-                page = block['Page'] if 'Page' in block else 1,
+                page=block['Page'] if 'Page' in block else 1,
                 bbox=coordinates(
                     left=block['Geometry']['BoundingBox']['Left'],
                     top=block['Geometry']['BoundingBox']['Top'],
@@ -207,6 +218,6 @@ def extract_bounding_boxes(result):
 
 # Example usage:
 if __name__ == "__main__":
-    documents = [{'Bucket': 'your-bucket-name', 'Name': 'your-document-name.pdf'}]
-    results = asyncio.run(useTextract(documents))
+    file_path = '/tmp/sample.pdf'
+    results = asyncio.run(useTextract(file_path))
     print(results)
