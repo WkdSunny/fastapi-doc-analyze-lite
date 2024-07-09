@@ -61,3 +61,4 @@ dump.rdb
 
 # Local files
 ignr.*
+.dataBank/

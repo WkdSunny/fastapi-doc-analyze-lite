@@ -1,24 +1,28 @@
+# /app/models/response_model.py
+"""
+This module defines the response models for the FastAPI application.
+"""
+
 from pydantic import BaseModel
 from typing import List
 
-class BoundingBox(BaseModel):
-    page: int
-    bbox: List[int]
+class ExtractionRequest(BaseModel):
     text: str
+    prompt: str
 
-    def to_dict(self):
-        return {
-            "page": self.page,
-            "bbox": self.bbox,
-            "text": self.text
-    }
+# class BoundingBox(BaseModel):
+#     left: float
+#     top: float
+#     width: float
+#     height: float
+
+class ExtractionItem(BaseModel):
+    extracted_key: str
+    extracted_value: str
+    # page: int
+    # bounding_box: BoundingBox
+    # confidence: float
 
 class ExtractionResponse(BaseModel):
-    data: str
-    bounding_boxes: List[BoundingBox]
-
-    def to_dict(self):
-        return {
-            "data": self.data,
-            "bounding_boxes": [bbox.dict() for bbox in self.bounding_boxes]
-        }
+    data: List[ExtractionItem]
+    # bounding_boxes: List[BoundingBox]
