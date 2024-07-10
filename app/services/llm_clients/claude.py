@@ -1,5 +1,5 @@
 from app.config import settings
-from app.models.response_model import ExtractionResponse
+from app.models.llm_model import ExtractionResponse
 import requests
 
 async def extract_with_claude(text: str, prompt: str) -> ExtractionResponse:

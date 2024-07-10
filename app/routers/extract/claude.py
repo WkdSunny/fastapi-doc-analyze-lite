@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.services.llm_clients.claude import extract_with_claude
-from app.models.response_model import ExtractionResponse
+from app.models.llm_model import ExtractionResponse
 from app.config import logger
 
 router = APIRouter(

@@ -4,9 +4,8 @@ This module defines the extraction routes for the FastAPI application using Open
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 from app.services.llm_clients.openai import extract_with_openai
-from app.models.response_model import ExtractionResponse, ExtractionItem, ExtractionRequest
+from app.models.llm_model import ExtractionResponse, ExtractionItem, ExtractionRequest
 import logging
 
 router = APIRouter(
@@ -32,7 +31,9 @@ async def extract_data(request: ExtractionRequest):
         for item in response:
             extraction_item = ExtractionItem(
                 extracted_key=item.get("Information Key", "N/A"),
+                extracted_matching_key=item.get("Matching Key", "N/A"),
                 extracted_value=item.get("Value", "N/A"),
+                additional_comments=item.get("Addl. Comments", "N/A"),
             )
             extraction_items.append(extraction_item)
         

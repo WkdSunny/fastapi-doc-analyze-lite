@@ -1,3 +1,8 @@
+# /app/models/pdf_model.py
+"""
+This module defines the Pydantic models for the PDF text extraction response.
+"""
+
 from pydantic import BaseModel
 from typing import List
 
