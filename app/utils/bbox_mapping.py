@@ -8,7 +8,21 @@ from app.models.pdf_model import coordinates, BoundingBox, PDFTextResponse
 from app.models.llm_model import ExtractionItem
 from app.models.response_model import ResponseItem, BoundingBox as ResponseBoundingBox
 
-async def get_bbox(bbox_data: List[PDFTextResponse]) -> List[Dict[str, Any]]:
+def convert_to_bbox_models(data: List[dict]) -> List[PDFTextResponse]:
+    bbox_models = []
+    for item in data:
+        bounding_boxes = [BoundingBox(**bbox) for bbox in item.get('bounding_boxes', [])]
+        bbox_models.append(PDFTextResponse(
+            file_name=item.get('file_name', 'N/A'),
+            text=item.get('text', 'N/A'),
+            bounding_boxes=bounding_boxes
+        ))
+    return bbox_models
+
+def convert_to_llm_models(data: List[dict]) -> List[ExtractionItem]:
+    return [ExtractionItem(**item) for item in data]
+
+async def get_bbox(bbox_data: List[BoundingBox]) -> List[Dict[str, Any]]:
     """
     Extract bounding boxes from the provided PDFTextResponse data.
     
@@ -55,11 +69,12 @@ async def map_bbox_to_data(llm_data: List[ExtractionItem], bbox_data: List[PDFTe
     try:
         for item in llm_data:
             for bbox in bounding_boxes:
-                if item.extracted_matching_key == bbox["text"]:
+                if item.matching_value == bbox["text"]:
                     response_item = ResponseItem(
-                        extracted_key=item.extracted_key,
-                        extracted_matching_key=item.extracted_matching_key,
-                        extracted_value=item.extracted_value,
+                        key=item.key,
+                        matching_key=item.matching_key,
+                        matching_value=item.matching_value,
+                        value=item.value,
                         additional_comments=item.additional_comments,
                         page=bbox["page"],
                         bounding_box=ResponseBoundingBox(**bbox["bbox"]),
@@ -67,11 +82,12 @@ async def map_bbox_to_data(llm_data: List[ExtractionItem], bbox_data: List[PDFTe
                     )
                     response_items.append(response_item)
                     break  # Break after finding the first match to avoid redundant checks
-            else:
-                response_item = ResponseItem(
-                    extracted_key=item.extracted_key,
-                    extracted_matching_key=item.extracted_matching_key,
-                    extracted_value=item.extracted_value,
+                else:
+                    response_item = ResponseItem(
+                    key=item.key,
+                    matching_key=item.matching_key,
+                    matching_value=item.matching_value,
+                    value=item.value,
                     additional_comments=item.additional_comments,
                     page=-1,  # Default value indicating no page found
                     bounding_box=ResponseBoundingBox(left=0, top=0, width=0, height=0),
@@ -89,9 +105,10 @@ if __name__ == "__main__":
 
     llm_data = [
         ExtractionItem(
-            extracted_key="key1",
-            extracted_matching_key="matching_key1",
-            extracted_value="value1",
+            key="key1",
+            matching_key="matching_key1",
+            matching_value="matching_value1",
+            value="value1",
             additional_comments="comments1"
         )
     ]

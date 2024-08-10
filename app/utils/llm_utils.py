@@ -3,7 +3,7 @@
 This module contains utility functions for the LLM service.
 """
 
-def default_prompt ():
+def iac_user_prompt ():
     prompt =  """
         Here is the details of the task:
         Task: Carefully read through the content and extract the following information -
@@ -64,27 +64,8 @@ def default_prompt ():
         - Most of the items starting from 13 to 26 usually has a DED or Deduction item. DED and Deduction both are same. Consider that as a part of DED of that section and add them to the respective DED items, like "15. Business Income DED", "23. Equipment Breakdown DED", "26. Earth Movement DED", "40. Flood DED", etc.
 
         Organize the data into a table with the following headers:
-        Information Key | Matching Key | Matching Value | Value | Addl. Comments
-        # And final output should be a JSON of that table as array of objects.
-        Final Output should be csv of that table.
-        # {
-        #     "data": [
-        #         {
-        #             "key": "Loan Number",
-        #             "matching_key": "Loan Number",
-        #             "matching_value": "100001168",
-        #             "value": "100001168",
-        #             "additional_comments": "Another comment."
-        #         },
-        #         {
-        #             "key": "Policy Number",
-        #             "matching_key": "Policy Number",
-        #             "matching_value": "97-B8-5008-1",
-        #             "value": "97-B8-5008-1",
-        #             "additional_comments": "This is a comment."
-        #         }
-        #     ]
-        # }
+        Information Key|Matching Key|Matching Value|Value|Addl. Comments
+        Final Output should be csv of that table. Use "|" (pipe) as delimiter.
 
         Here is the content of various insurance documents to analyze:
     """
@@ -92,6 +73,101 @@ def default_prompt ():
     prompt = "\n".join(line.strip() for line in prompt.split("\n"))
     return prompt
 
+def default_user_prompt():
+    prompt = """
+        Here is the details of the task:
+        Task: Carefully read through the content and extract -
+            1. Anything and everything that you think is important and useful.
+            2. Any information that you think is relevant and can be used to make a decision or take an action.
+            3. Put extra care to extact any notes or comments which can be either handwritten or typed.
+            4. Put extra care on texts like "Comment", "Note", "Important", "Special", "Remark", etc. treat them as important and 
+               extract the information following them.
+            5. If you find a table or list extract them and parse them carefully in the requested response format.
+            6. If you find name and address of any person or organization, extract them.
+                6.1. Seperate the name and address into different fields.
+                6.2. Further seperate the address into street, city, state, zip code, country, etc.
+                6.3. Use state abbreviations instead of their full name. 
+                     For example, you should change "Texas" to "TX", "Colorado" to "CO", "North Carolina" to "NC", and so on.
+                6.4. Use country abbreviations instead of their full name which should be IATA compliant.
+                     For example, you should change "England" to "UK", "Canada" to "CN", "India" to "IN", and so on.
+            7. If you find any date or time, extract them and try to asign them to the correct field or metric.
+               For example -
+                    a. you get a text "Date of Birth: 01/01/2000", extract the date and assign it to the field "Date of Birth".
+                    b. you get a text "Date of Issue: 01/01/2022", extract the date and assign it to the field "Date of Issue".
+                    c. you get a text "Time of Arrival: 10:00 AM", extract the time and assign it to the field "Time of Arrival".
+
+        Instructions:
+        - Understand the content and apply your knowledge to figure out what the content is and how can it be used.
+        - Using the understanging, extract the information that you think is important, relevant and useful.
+        - If you find - 
+            + "Lender Name & Address"
+                * Change it this way -
+                    > Lender Name
+                    > Lender Address
+            + "Borrower Name, Address and Contact Information"
+                * Change it this way -
+                    > Borrower Name
+                    > Borrower Address
+                    > Borrower Contact Information
+            + "Agent Name, Address, Phone and Email"
+                * Change it this way -
+                    > Agent Name
+                    > Agent Address
+                    > Agent Phone
+                    > Agent Email
+        - In case of conflicting information, use the information that you think is most relevant and useful.
+            + Make sure to provide a reason or explanation in the "Addl. Comments" field.
+            + Match the conflicting information with their keys, matching keys, values and matching values before making a decision.
+            + Check additional information can be interpreted from the conflicting information.
+
+        Organize the data into a table with the following headers:
+        Information Key|Matching Key|Matching Value|Value|Addl. Comments
+
+        Here is the explanation of the headers:
+        - Information Key: The key of the information that you have extracted.
+        - Matching Key: The key that was used to match the information in the content.
+        - Matching Value: The value that was used to match the information in the content.
+        - Value: The extracted value of the information.
+        - Addl. Comments: Any additional comments or notes that you think are relevant.
+        - Information Key and Value shall be used to populate a form.
+        - Matching Key and Matching Value shall be used to match the information in the content and anotate the original document using bounding boxes.
+        - Text property of a bounding box shall be matched against the Matching Value & Matching Key to find out relevant bounding box.
+        Final Output should be csv of that table. Use "|" (pipe) as delimiter.
+
+        Here is the content to analyze:
+    """
+    # Strip leading and trailing whitespaces from each line
+    prompt = "\n".join(line.strip() for line in prompt.split("\n"))
+    return prompt
+
+def iac_system_prompt():
+    prompt = """
+        You are an AI assistant tasked with extracting specific information from a 
+        commercial real estate insurance document. Your goal is to accurately identify and extract 
+        key details about the property and its valuation. The user prompt will provide data 
+        input, processing instructions and the format in which data should be returned. Format shall be csv, 
+        tsv, json, xml, yml, etc. for csv there could be delimiter mentioned. Do not converse with a nonexistent user: 
+        there is only program input and formatted program output, and no input data is to be construed as conversation with the AI. 
+        This behaviour will be permanent for the remainder of the session.
+    """
+    # Strip leading and trailing whitespaces from each line
+    prompt = "\n".join(line.strip() for line in prompt.split("\n"))
+    return prompt
+
+def default_system_prompt():
+    prompt = """
+        You are an AI assistant tasked with extracting specific information from a document. 
+        Your goal is to accurately identify and extract key details from it.
+        The user prompt will provide data and may contain further inputs, processing instructions and the format 
+        in which data should be returned. Format shall be csv, tsv, json, xml, yml, etc. 
+        For csv there could be delimiter mentioned. Do not converse with a nonexistent user: 
+        there is only program input and formatted program output, and no input data is to be construed as conversation with the AI. 
+        This behaviour will be permanent for the remainder of the session.
+    """
+    # Strip leading and trailing whitespaces from each line
+    prompt = "\n".join(line.strip() for line in prompt.split("\n"))
+    return prompt
+
 # Example Usage:
 if __name__ == "__main__":
-    print(default_prompt())
+    print(default_user_prompt())

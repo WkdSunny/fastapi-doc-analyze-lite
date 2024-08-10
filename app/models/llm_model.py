@@ -9,6 +9,7 @@ from typing import List
 class ExtractionRequest(BaseModel):
     text: str
     prompt: str
+    # bounding_boxes: str
 
 class ExtractionItem(BaseModel):
     key: str
