@@ -67,7 +67,29 @@ fastapi-iac-py
   2.2. For MAC: brew install poppler
   2.3. For Linux: sudo apt-get install poppler-utils
 
-3. pip install -r requirements.txt
+3. Use MongoDB
+  3.1. For Local Installation - 
+    3.1.1. For Mac: 
+      brew tap mongodb/brew && brew install mongodb-community@6.0
+    3.1.2. For Linux:
+      sudo apt-get update && sudo apt-get install -y mongodb
+    3.1.3. For Windows:
+  3.2. Start Service:
+    3.2.1. For Mac: 
+      brew services start mongodb/brew/mongodb-community@6.0
+    3.2.2. For Linux:
+      sudo systemctl start mongod
+    3.2.3. For Windows:
+      "C:\Program Files\MongoDB\Server\6.0\bin\mongod.exe"
+  3.3. On start up application will complete the db initialization
+    3.3.1. Covers -
+      3.3.1.1. Creating DB
+      3.3.1.2. Crating Collections
+
+4. pip install -r requirements.txt
+5. Download Models -
+  5.1. Mac & Linux -
+    spacy en_core_web_sm: python -m spacy download en_core_web_sm
 
 # Starting the Server
 1. Install Redis

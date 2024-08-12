@@ -7,7 +7,7 @@ import asyncio
 import aiofiles
 import filetype
 from typing import List, Dict, Any
-from celery.result import AsyncResult
+from datetime import datetime, timezone
 from fastapi import APIRouter, File, UploadFile, HTTPException
 from app.config import settings, logger
 from app.services.processors.word import useDocX
@@ -20,6 +20,8 @@ router = APIRouter(
     prefix="/convert",
     tags=["convert"]
 )
+
+database = settings.database
 
 async def save_temp_file(file: UploadFile) -> str:
     """
@@ -36,12 +38,28 @@ async def save_temp_file(file: UploadFile) -> str:
         await temp_file.write(await file.read())
     return temp_path
 
+async def insert_document_and_segments(document_data: Dict[str, Any], segments: List[Dict[str, Any]]) -> str:
+    """
+    Insert the document data and its segments into the MongoDB database.
+    """
+    # Insert the document data into the Documents collection
+    document_id = database["Documents"].insert_one(document_data).inserted_id
+    
+    # Prepare segment data with document_id reference
+    for segment in segments:
+        segment["document_id"] = document_id
+    
+    # Insert the segments into the Segments collection
+    database["Segments"].insert_many(segments)
+    
+    return str(document_id)
+
 @router.post("/", response_model=Dict[str, Any])
 async def convert_files(files: List[UploadFile] = File(...)):
     responses = []
-    unsupported_files = []
-    failed_files = []
-    success_files = []
+    # unsupported_files = []
+    # failed_files = []
+    # success_files = []
 
     for file in files:
         try:
@@ -68,15 +86,40 @@ async def convert_files(files: List[UploadFile] = File(...)):
             elif 'image' in content_type:
                 task = useTextract.delay(temp_path)
             else:
-                unsupported_files.append(file.filename)
+                # unsupported_files.append(file.filename)
                 logger.error(f"Unsupported file type: {file.filename}")
                 continue
 
-            result = await wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT)
-            success_files.append(file.filename)
+            result = {"document_id": None}
+            result.update(await wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT))
+            # success_files.append(file.filename)
+
+            # Prepare document data and segments
+            document_data = {
+                "file_name": file.filename,
+                "uploaded_at": datetime.now(timezone.utc),
+                "text": result["text"],  # Extracted text
+                "status": "processed"
+            }
+
+            segments = []
+            for bbox in result["bounding_boxes"]:
+                segment = {
+                    "page": bbox["page"],
+                    "bbox": bbox["bbox"],
+                    "text": bbox["text"],
+                    "confidence": bbox["confidence"]
+                }
+                segments.append(segment)
+            
+            # Insert data into MongoDB
+            document_id = await insert_document_and_segments(document_data, segments)
+            logger.info(f"Inserted document with ID: {document_id} into the database")
+
+            result["document_id"] = document_id
             responses.append(result)
         except Exception as e:
-            failed_files.append(file.filename)
+            # failed_files.append(file.filename)
             logger.error(f"Failed to process file {file.filename}: {e}")
 
     if not responses:
@@ -85,8 +128,8 @@ async def convert_files(files: List[UploadFile] = File(...)):
     return {
         "status": 200,
         "success": True,
-        "unsupported_files": unsupported_files,
-        "conversion_failed": failed_files,
+        # "unsupported_files": unsupported_files,
+        # "conversion_failed": failed_files,
         "result": responses
     }
 

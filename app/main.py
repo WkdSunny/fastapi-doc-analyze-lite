@@ -4,7 +4,7 @@ from starlette.middleware.authentication import AuthenticationMiddleware
 from app.routers import convert
 from app.routers.extract import openai, claude
 from app.dependencies import verify_token
-from app.config import logger  # Import the logger from config
+from app.config import logger, init_db
 
 app = FastAPI()
 
@@ -25,3 +25,8 @@ async def universal_exception_handler(request, exc):
     logger.error(f"Unhandled exception: {exc} - Request details: {request.url.path}")
     return {"message": "An internal error occurred", "details": str(exc)}
 
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    init_db()
+    logger.info("Database initialized and collections checked")

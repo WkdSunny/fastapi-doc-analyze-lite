@@ -1,6 +1,7 @@
 import os
 import logging
 from logging.handlers import RotatingFileHandler
+from pymongo import MongoClient
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -21,6 +22,14 @@ class Settings:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Gets the directory where the script resides
     LOG_DIRECTORY = os.path.join(BASE_DIR, "logs")
     LOG_FILE = "api.log"
+
+    # Define DB settings
+    MONGO_URI = os.getenv("MONGO_URI")
+    DATABASE_NAME = os.getenv("DATABASE_NAME")
+
+    # Initialize MongoDB client
+    mongo_client = MongoClient(MONGO_URI)
+    database = mongo_client[DATABASE_NAME]
 
 def setup_logging():
     """Set up the logging configuration."""
@@ -53,7 +62,25 @@ def setup_logging():
 
     return logger
 
+def init_db():
+    """Initialize the database and collections."""
+    try:
+        required_collections = ["Documents", "Segments", "Entities", "Topics", "Questions", "Answers", "Labels"]
+        database = Settings.database
+
+        # Check if collections exist, if not, create them
+        existing_collections = database.list_collection_names()
+        for collection in required_collections:
+            if collection not in existing_collections:
+                database.create_collection(collection)
+                logger.info(f"Created collection: {collection}")
+
+        logger.info("Database initialized successfully")
+    except ConnectionError as e:
+        logger.error(f"Failed to connect to the database: {e}")
+    except Exception as e:
+        logger.error(f"An error occurred during database initialization: {e}")
+
 # Initialize the logger
 logger = setup_logging()
-
 settings = Settings()
