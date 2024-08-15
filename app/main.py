@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from starlette.middleware.authentication import AuthenticationMiddleware
 from app.routers import convert
-# from app.routers import convert_v1
+from app.routers import convert_v1
 from app.routers import questions
 from app.routers.extract import openai, claude
 from app.dependencies import verify_token
@@ -21,7 +21,7 @@ async def root(request: Request):
 
 # Include routers with logging
 app.include_router(convert.router, dependencies=[Depends(verify_token)])
-# app.include_router(convert_v1.router, dependencies=[Depends(verify_token)])
+app.include_router(convert_v1.router, dependencies=[Depends(verify_token)])
 app.include_router(questions.router, dependencies=[Depends(verify_token)])
 app.include_router(openai.router, dependencies=[Depends(verify_token)])
 app.include_router(claude.router, dependencies=[Depends(verify_token)])

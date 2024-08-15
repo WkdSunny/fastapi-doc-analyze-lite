@@ -104,7 +104,7 @@ async def get_result(client, job_id):
         attempts = 0
         wait_time = 5  # Start with no wait time
         max_attempts = 10  # Set a maximum number of attempts
-        max_timeout = 10000  # Set a timeout for the entire operation (in seconds)
+        max_timeout = settings.PDF_PROCESSING_TIMEOUT  # Set a timeout for the entire operation (in seconds)
 
         while attempts < max_attempts:
             response = await asyncio.wait_for(client.get_document_text_detection(JobId=job_id), timeout=max_timeout)

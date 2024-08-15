@@ -13,14 +13,14 @@ from app.tasks.excel_tasks import process_excel
 from app.tasks.word_tasks import process_word
 from app.tasks.img_tasks import process_img
 from app.services.file_processing import save_temp_file, get_file_type, call_question_generation_api
-from app.services.document_classification import DocumentClassifier
-from app.services.entity_recognition import EntityRecognizer
-from app.services.document_segmentation import DocumentSegmenter
-from app.services.topic_modeling.pipeline import TopicModelingPipeline
-from app.services.tfidf_extraction import TFIDFExtractor
-from app.services.db.insert import insert_documents, insert_segments, insert_entities, insert_classification, insert_topics
+# from app.services.document_classification import DocumentClassifier
+# from app.services.entity_recognition import EntityRecognizer
+# from app.services.document_segmentation import DocumentSegmenter
+# from app.services.topic_modeling.pipeline import TopicModelingPipeline
+# from app.services.tfidf_extraction import TFIDFExtractor
+# from app.services.db.insert import insert_documents, insert_segments, insert_entities, insert_classification, insert_topics
 from app.tasks.celery_tasks import wait_for_celery_task
-from app.models.rag_model import Segment, Entity, Topic, Classification
+# from app.models.rag_model import Segment, Entity, Topic, Classification
 
 router = APIRouter(
     prefix="/convert",
@@ -45,15 +45,15 @@ async def convert_files(request: Request, files: List[UploadFile] = File(...)):
         HTTPException: If there's an error during the file processing.
     """
     responses = []
-    segments_all: List[Segment] = []
-    entities_all: List[Entity] = []
-    topics_all: List[Topic] = []
-    classifications_all: List[Classification] = []
+    # segments_all: List[Segment] = []
+    # entities_all: List[Entity] = []
+    # topics_all: List[Topic] = []
+    # classifications_all: List[Classification] = []
 
-    document_classifier = DocumentClassifier()
-    entity_recognizer = EntityRecognizer()
-    document_segmenter = DocumentSegmenter()
-    tfidf_extractor = TFIDFExtractor()
+    # document_classifier = DocumentClassifier()
+    # entity_recognizer = EntityRecognizer()
+    # document_segmenter = DocumentSegmenter()
+    # tfidf_extractor = TFIDFExtractor()
 
     for file in files:
         try:
