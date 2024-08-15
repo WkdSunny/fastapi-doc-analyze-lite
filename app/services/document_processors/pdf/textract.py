@@ -102,19 +102,30 @@ async def get_result(client, job_id):
     """
     try:
         attempts = 0
-        while True:
-            response = await client.get_document_text_detection(JobId=job_id)
+        wait_time = 5  # Start with no wait time
+        max_attempts = 10  # Set a maximum number of attempts
+        max_timeout = 10000  # Set a timeout for the entire operation (in seconds)
+
+        while attempts < max_attempts:
+            response = await asyncio.wait_for(client.get_document_text_detection(JobId=job_id), timeout=max_timeout)
             logger.info(f"Job Status for {job_id}: {response['JobStatus']}")
             if response['JobStatus'] in ['SUCCEEDED', 'FAILED']:
                 break
+
             attempts += 1
-            if attempts > 5:
-                logger.warning(f"Too many attempts for Job ID {job_id}. Increasing wait time.")
-                await asyncio.sleep(10)
-            else:
-                await asyncio.sleep(5)
-        logger.info(f"Retrieved document text detection result for Job ID {job_id}")
-        return response
+            wait_time *= 2  # Incremental delay of 5 seconds
+            logger.warning(f"Attempt {attempts} for Job ID {job_id}. Waiting {wait_time} seconds before next attempt.")
+            await asyncio.sleep(wait_time)
+
+        if response['JobStatus'] == 'SUCCEEDED':
+            logger.info(f"Retrieved document text detection result for Job ID {job_id}")
+            return response
+        else:
+            raise TimeoutError(f"Failed to complete job {job_id} after {max_attempts} attempts.")
+
+    except asyncio.TimeoutError:
+        logger.error(f"Timeout occurred while retrieving document text for Job ID {job_id}")
+        raise
     except Exception as e:
         logger.error(f"Failed to retrieve document text for Job ID {job_id}: {e}")
         raise

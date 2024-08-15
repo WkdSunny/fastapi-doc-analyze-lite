@@ -23,7 +23,7 @@ class Settings:
     CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
     BEARER_TOKEN = os.getenv("API_TOKEN")
     REDIS_URL = os.getenv("REDIS_URL")
-    PDF_PROCESSING_TIMEOUT = int(os.getenv("PDF_PROCESSING_TIMEOUT", 180))  # Default to 180 seconds
+    PDF_PROCESSING_TIMEOUT = int(os.getenv("PDF_PROCESSING_TIMEOUT", 600))  # Default to 180 seconds
 
     # Define the path for log files
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Gets the directory where the script resides
@@ -42,69 +42,73 @@ class Settings:
     QUESTIONS_ENDPOINT = os.getenv("SELF_QUESTIONS_URI")
 
     # Configuration for PDF Processor Prioritization
-    PDF_PROCESSOR_PRIORITIZATION = [
-        {
-            'name': 'muPDF',
-            'processor': 'app.services.document_processors.pdf.muPDF.usePyMuPDF',
-            'parallel': True,  # Run in parallel with others
-            'success_rate': 0.95,  # Assumed success rate
-            'speed': 'fast',  # Assumed processing speed
-        },
-        {
-            'name': 'pdf_miner',
-            'processor': 'app.services.document_processors.pdf.pdf_miner.usePDFMiner',
-            'parallel': True,
-            'success_rate': 0.85,
-            'speed': 'medium',
-        },
-        {
-            'name': 'textract',
-            'processor': 'app.services.document_processors.pdf.textract.useTextract',
-            'parallel': False,  # Sequential fallback
-            'success_rate': 0.70,
-            'speed': 'slow',
-        },
-        {
-            'name': 'tesseract',
-            'processor': 'app.services.document_processors.pdf.tesseract.useTesseract',
-            'parallel': True,
-            'success_rate': 0.60,
-            'speed': 'slow',
-        },
-    ]
+    # PDF_PROCESSOR_PRIORITIZATION = [
+    #     {
+    #         'name': 'muPDF',
+    #         'processor': 'app.services.document_processors.pdf.muPDF.usePyMuPDF',
+    #         'parallel': True,  # Run in parallel with others
+    #         'success_rate': 0.95,  # Assumed success rate
+    #         'speed': 'fast',  # Assumed processing speed
+    #         'timeout': PDF_PROCESSING_TIMEOUT,  # Timeout in seconds
+    #     },
+    #     {
+    #         'name': 'pdf_miner',
+    #         'processor': 'app.services.document_processors.pdf.pdf_miner.usePDFMiner',
+    #         'parallel': True,
+    #         'success_rate': 0.85,
+    #         'speed': 'medium',
+    #         'timeout': PDF_PROCESSING_TIMEOUT,
+    #     },
+    #     {
+    #         'name': 'textract',
+    #         'processor': 'app.services.document_processors.pdf.textract.useTextract',
+    #         'parallel': False,  # Sequential fallback
+    #         'success_rate': 0.70,
+    #         'speed': 'slow',
+    #         'timeout': 10000,
+    #     },
+    #     {
+    #         'name': 'tesseract',
+    #         'processor': 'app.services.document_processors.pdf.tesseract.useTesseract',
+    #         'parallel': False,
+    #         'success_rate': 0.60,
+    #         'speed': 'slow',
+    #         'timeout': 10000,
+    #     },
+    # ]
 
-    IMG_PROCESSOR_PRIORITIZATION = [
-        {
-            'name': 'textract',
-            'processor': 'app.services.document_processors.pdf.textract.useTextract',
-            'parallel': False,  # Sequential fallback
-            'success_rate': 0.70,
-            'speed': 'slow',
-        },
-        {
-            'name': 'tesseract',
-            'processor': 'app.services.document_processors.pdf.tesseract.useTesseract',
-            'parallel': True,
-            'success_rate': 0.60,
-            'speed': 'slow',
-        },
-    ]
+    # IMG_PROCESSOR_PRIORITIZATION = [
+    #     {
+    #         'name': 'textract',
+    #         'processor': 'app.services.document_processors.pdf.textract.useTextract',
+    #         'parallel': False,  # Sequential fallback
+    #         'success_rate': 0.70,
+    #         'speed': 'slow',
+    #     },
+    #     {
+    #         'name': 'tesseract',
+    #         'processor': 'app.services.document_processors.pdf.tesseract.useTesseract',
+    #         'parallel': True,
+    #         'success_rate': 0.60,
+    #         'speed': 'slow',
+    #     },
+    # ]
 
-    EXCEL_PROCESSOR_PRIORITIZATION = [
-        {
-            'name': 'openpyxl',
-            'processor': 'app.services.document_processors.excel.openpyxl.useOpenpyxl',
-            'parallel': True,
-        },
-    ]
+    # EXCEL_PROCESSOR_PRIORITIZATION = [
+    #     {
+    #         'name': 'openpyxl',
+    #         'processor': 'app.services.document_processors.excel.openpyxl.useOpenpyxl',
+    #         'parallel': True,
+    #     },
+    # ]
 
-    WORD_PROCESSOR_PRIORITIZATION = [
-        {
-            'name': 'python-docx',
-            'processor': 'app.services.document_processors.word.python_docx.usePythonDocx',
-            'parallel': True,
-        },
-    ]
+    # WORD_PROCESSOR_PRIORITIZATION = [
+    #     {
+    #         'name': 'python-docx',
+    #         'processor': 'app.services.document_processors.word.python_docx.usePythonDocx',
+    #         'parallel': True,
+    #     },
+    # ]
 
 
 
