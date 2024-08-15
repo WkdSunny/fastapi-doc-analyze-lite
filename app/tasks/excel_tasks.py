@@ -4,21 +4,20 @@ This module defines the Excel processing tasks for the FastAPI application.
 """
 
 import asyncio
-import functools
-import importlib
 from celery import shared_task, Task
 from app.config import settings, logger
 from app.tasks.async_tasks import run_async_task
 from app.tasks.celery_tasks import wait_for_celery_task
-from app.services.processors.excel import useOpenPyXL
+from app.services.document_processors.excel import useOpenPyXL
 from app.config import settings
 
-class ExcelTask(Task):
-    autoretry_for = (Exception,)
-    retry_kwargs = {'max_retries': 3, 'countdown': 5}
-    retry_backoff = True
+# class ExcelTask(Task):
+#     autoretry_for = (Exception,)
+#     retry_kwargs = {'max_retries': 3, 'countdown': 5}
+#     retry_backoff = True
 
-@shared_task(base=ExcelTask)
+# @shared_task(base=ExcelTask)
+@shared_task
 def process_excel(file_path):
     """
     Process Excel files based on type and handle fallbacks.

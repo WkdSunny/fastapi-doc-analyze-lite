@@ -11,7 +11,11 @@ from app.config import settings, logger
 from app.models.pdf_model import PDFTextResponse
 from app.tasks.async_tasks import run_async_task
 from app.tasks.celery_tasks import wait_for_celery_task
-from app.services.processors.pdf import muPDF, pdf_miner, textract, tesseract
+# from app.services.processors.pdf import muPDF, pdf_miner, textract, tesseract
+from app.services.document_processors.pdf.muPDF import usePyMuPDF
+from app.services.document_processors.pdf.pdf_miner import usePDFMiner
+from app.services.document_processors.pdf.textract import useTextract
+from app.services.document_processors.pdf.tesseract import useTesseract
 from app.config import settings
 
 # class PDFTask(Task):
@@ -98,7 +102,8 @@ async def _process_pdf(temp_path):
         logger.info(f"Starting process_pdf task for {temp_path}")
 
         # Processors in the order of preference
-        processors = [muPDF.usePyMuPDF, pdf_miner.usePDFMiner, textract.useTextract, tesseract.useTesseract]
+        # processors = [muPDF.usePyMuPDF, pdf_miner.usePDFMiner, textract.useTextract, tesseract.useTesseract]
+        processors = [usePyMuPDF, usePDFMiner, useTextract, useTesseract]
 
         response = await process_with_fallbacks(temp_path, processors)
         logger.info(f"Processing result: {response}")

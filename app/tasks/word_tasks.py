@@ -10,15 +10,16 @@ from celery import shared_task, Task
 from app.config import settings, logger
 from app.tasks.async_tasks import run_async_task
 from app.tasks.celery_tasks import wait_for_celery_task
-from app.services.processors.word import useDocX
+from app.services.document_processors.word import useDocX
 from app.config import settings
 
-class WordTask(Task):
-    autoretry_for = (Exception,)
-    retry_kwargs = {'max_retries': 3, 'countdown': 5}
-    retry_backoff = True
+# class WordTask(Task):
+#     autoretry_for = (Exception,)
+#     retry_kwargs = {'max_retries': 3, 'countdown': 5}
+#     retry_backoff = True
 
-@shared_task(base=WordTask)
+# @shared_task(base=WordTask)
+@shared_task
 def process_word(file_path):
     """
     Process Word documents based on type and handle fallbacks.

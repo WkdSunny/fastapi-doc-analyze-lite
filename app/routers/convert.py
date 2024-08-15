@@ -7,7 +7,7 @@ import asyncio
 from typing import List, Dict, Any
 from fastapi import APIRouter, File, UploadFile, HTTPException, Request
 from app.config import settings, logger
-from app.services.processors.pdf.textract import useTextract
+from app.services.document_processors.pdf.textract import useTextract
 from app.tasks.pdf_tasks import process_pdf
 from app.tasks.excel_tasks import process_excel
 from app.tasks.word_tasks import process_word

@@ -1,3 +1,8 @@
+# /app/tasks/async_tasks.py
+"""
+This module defines a Celery task for running asynchronous tasks in a synchronous context.
+"""
+
 import asyncio
 from celery import shared_task
 from app.config import logger
