@@ -21,15 +21,16 @@ app.autodiscover_tasks(['app.tasks'])
 
 # Configure Celery settings
 app.conf.update(
-    task_serializer='json',
-    accept_content=['json'],
-    result_serializer='json',
-    timezone='Europe/London',
-    enable_utc=True,
-    broker_connection_retry_on_startup=True,
-    worker_log_level='INFO',
-    task_acks_late=True,
-    worker_max_tasks_per_child=100,
+    task_serializer='json',                         # Use JSON to serialize task arguments and results.
+    accept_content=['json'],                        # Accept only JSON format for content.
+    result_serializer='json',                       # Serialize task results as JSON.
+    timezone='America/New_York',                    # Set timezone to US Eastern Time (ET).
+    enable_utc=True,                                # Enable UTC, ensuring consistency across different regions.
+    broker_connection_retry_on_startup=True,        # Retry connecting to the broker if it fails at startup.
+    worker_log_level='INFO',                        # Set logging level to INFO for detailed logs.
+    task_acks_late=True,                            # Acknowledge tasks after execution to prevent data loss if a worker crashes.
+    worker_max_tasks_per_child=100,                 # Recycle workers after 100 tasks to prevent memory leaks.
+    worker_prefetch_multiplier=1                    # Prevent overloading a single worker by balancing task distribution.
 )
 
 stop_event = threading.Event()
