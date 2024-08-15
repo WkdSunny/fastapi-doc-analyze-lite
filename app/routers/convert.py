@@ -11,6 +11,7 @@ from app.services.document_processors.pdf.textract import useTextract
 from app.tasks.pdf_tasks import process_pdf
 from app.tasks.excel_tasks import process_excel
 from app.tasks.word_tasks import process_word
+from app.tasks.img_tasks import process_img
 from app.services.file_processing import save_temp_file, get_file_type, call_question_generation_api
 from app.services.document_classification import DocumentClassifier
 from app.services.entity_recognition import EntityRecognizer
@@ -71,11 +72,14 @@ async def convert_files(request: Request, files: List[UploadFile] = File(...)):
                 logger.info(f"PDF file detected...")
                 task = process_pdf.delay(temp_path)
             elif 'excel' in content_type or 'spreadsheetml' in content_type:
+                logger.info(f"Excel file detected...")
                 task = process_excel.delay(temp_path)
             elif 'wordprocessingml' in content_type or 'msword' in content_type:
+                logger.info(f"Word document detected...")
                 task = process_word.delay(temp_path)
             elif 'image' in content_type:
-                task = useTextract.delay(temp_path)
+                logger.info(f"Image file detected...")
+                task = process_img.delay(temp_path)
             else:
                 logger.error(f"Unsupported file type: {file.filename}")
                 continue

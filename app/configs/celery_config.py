@@ -13,6 +13,7 @@ app = Celery('doc_analyse_tasks',
                 'app.tasks.pdf_tasks',
                 'app.tasks.word_tasks',
                 'app.tasks.excel_tasks',
+                'app.tasks.img_tasks',
              ]
             )
 
@@ -44,6 +45,9 @@ def start_worker(max_retries=3, delay=5):
     """
     retries = 0
     while retries < max_retries:
+        if stop_event.is_set():
+            logger.info("Stop event detected. Shutting down worker before start.")
+            break
         try:
             logger.info("Starting Celery worker")
             app.start()

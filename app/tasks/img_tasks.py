@@ -1,4 +1,4 @@
-# /app/tasks/pdf_tasks.py
+# /app/tasks/img_tasks.py
 """
 This module defines the PDF processing tasks for the FastAPI application.
 """
@@ -10,8 +10,6 @@ from app.config import settings, logger
 from app.models.pdf_model import PDFTextResponse
 from app.tasks.async_tasks import run_async_task
 from app.tasks.celery_tasks import wait_for_celery_task
-from app.services.document_processors.pdf.muPDF import usePyMuPDF
-from app.services.document_processors.pdf.pdf_miner import usePDFMiner
 from app.services.document_processors.pdf.textract import useTextract
 from app.services.document_processors.pdf.tesseract import useTesseract
 from app.config import settings
@@ -23,18 +21,18 @@ from app.config import settings
 
 # @shared_task(Base=PDFTask)
 @shared_task()
-def process_pdf(temp_path):
+def process_img(temp_path):
     """
-    Process PDF files based on type and handle fallbacks.
+    Process Image files based on type and handle fallbacks.
 
     Args:
-    temp_path (str): The temporary path of the PDF file.
+    temp_path (str): The temporary path of the Image file.
 
     Returns:
     PDFTextResponse: Contains the file name, concatenated text, and bounding boxes.
     """
     try:
-        results = run_async_task(_process_pdf, temp_path)
+        results = run_async_task(_process_img, temp_path)
         if not results['bounding_boxes']:
             logger.warning(f"No text extracted from {temp_path}")
             raise Exception(f"PDF processing failed...")
@@ -86,7 +84,7 @@ async def process_with_fallbacks(file_path, processors):
             
     return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
 
-async def _process_pdf(temp_path):
+async def _process_img(temp_path):
     """
     Process PDF files based on type and handle fallbacks.
 
@@ -100,8 +98,7 @@ async def _process_pdf(temp_path):
         logger.info(f"Starting process_pdf task for {temp_path}")
 
         # Processors in the order of preference
-        # processors = [muPDF.usePyMuPDF, pdf_miner.usePDFMiner, textract.useTextract, tesseract.useTesseract]
-        processors = [usePyMuPDF, usePDFMiner, useTextract, useTesseract]
+        processors = [useTextract, useTesseract]
 
         response = await process_with_fallbacks(temp_path, processors)
         logger.info(f"Processing result: {response}")
@@ -188,5 +185,5 @@ async def _process_pdf(temp_path):
 # Example usage:
 if __name__ == "__main__":
     temp_path = "/tmp/sample.pdf"
-    results = asyncio.run(process_pdf(temp_path))
+    results = asyncio.run(process_img(temp_path))
     print(results)

@@ -73,6 +73,23 @@ class Settings:
         },
     ]
 
+    IMG_PROCESSOR_PRIORITIZATION = [
+        {
+            'name': 'textract',
+            'processor': 'app.services.processors.pdf.textract.useTextract',
+            'parallel': False,  # Sequential fallback
+            'success_rate': 0.70,
+            'speed': 'slow',
+        },
+        {
+            'name': 'tesseract',
+            'processor': 'app.services.processors.pdf.tesseract.useTesseract',
+            'parallel': True,
+            'success_rate': 0.60,
+            'speed': 'slow',
+        },
+    ]
+
     EXCEL_PROCESSOR_PRIORITIZATION = [
         {
             'name': 'openpyxl',
