@@ -42,52 +42,52 @@ class Settings:
     QUESTIONS_ENDPOINT = os.getenv("SELF_QUESTIONS_URI")
 
     # Configuration for PDF Processor Prioritization
-    PDF_PROCESSOR_PRIORITIZATION = [
-        # {
-        #     'name': 'muPDF',
-        #     'processor': 'app.services.processors.pdf.muPDF.usePyMuPDF',
-        #     'parallel': True,  # Run in parallel with others
-        #     'success_rate': 0.95,  # Assumed success rate
-        #     'speed': 'fast',  # Assumed processing speed
-        # },
-        # {
-        #     'name': 'pdf_miner',
-        #     'processor': 'app.services.processors.pdf.pdf_miner.usePDFMiner',
-        #     'parallel': True,
-        #     'success_rate': 0.85,
-        #     'speed': 'medium',
-        # },
-        {
-            'name': 'textract',
-            'processor': 'app.services.processors.pdf.textract.useTextract',
-            'parallel': True,  # Sequential fallback
-            'success_rate': 0.70,
-            'speed': 'slow',
-        },
-        # {
-        #     'name': 'tesseract',
-        #     'processor': 'app.services.processors.pdf.tesseract.useTesseract',
-        #     'parallel': True,
-        #     'success_rate': 0.60,
-        #     'speed': 'slow',
-        # },
-    ]
+    # PDF_PROCESSOR_PRIORITIZATION = [
+    #     {
+    #         'name': 'muPDF',
+    #         'processor': 'app.services.processors.pdf.muPDF.usePyMuPDF',
+    #         'parallel': True,  # Run in parallel with others
+    #         'success_rate': 0.95,  # Assumed success rate
+    #         'speed': 'fast',  # Assumed processing speed
+    #     },
+    #     {
+    #         'name': 'pdf_miner',
+    #         'processor': 'app.services.processors.pdf.pdf_miner.usePDFMiner',
+    #         'parallel': True,
+    #         'success_rate': 0.85,
+    #         'speed': 'medium',
+    #     },
+    #     {
+    #         'name': 'textract',
+    #         'processor': 'app.services.processors.pdf.textract.useTextract',
+    #         'parallel': False,  # Sequential fallback
+    #         'success_rate': 0.70,
+    #         'speed': 'slow',
+    #     },
+    #     {
+    #         'name': 'tesseract',
+    #         'processor': 'app.services.processors.pdf.tesseract.useTesseract',
+    #         'parallel': True,
+    #         'success_rate': 0.60,
+    #         'speed': 'slow',
+    #     },
+    # ]
 
-    EXCEL_PROCESSOR_PRIORITIZATION = [
-        {
-            'name': 'openpyxl',
-            'processor': 'app.services.processors.excel.openpyxl.useOpenpyxl',
-            'parallel': True,
-        },
-    ]
+    # EXCEL_PROCESSOR_PRIORITIZATION = [
+    #     {
+    #         'name': 'openpyxl',
+    #         'processor': 'app.services.processors.excel.openpyxl.useOpenpyxl',
+    #         'parallel': True,
+    #     },
+    # ]
 
-    WORD_PROCESSOR_PRIORITIZATION = [
-        {
-            'name': 'python-docx',
-            'processor': 'app.services.processors.word.python_docx.usePythonDocx',
-            'parallel': True,
-        },
-    ]
+    # WORD_PROCESSOR_PRIORITIZATION = [
+    #     {
+    #         'name': 'python-docx',
+    #         'processor': 'app.services.processors.word.python_docx.usePythonDocx',
+    #         'parallel': True,
+    #     },
+    # ]
 
 
 

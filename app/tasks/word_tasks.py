@@ -10,6 +10,7 @@ from celery import shared_task, Task
 from app.config import settings, logger
 from app.tasks.async_tasks import run_async_task
 from app.tasks.celery_tasks import wait_for_celery_task
+from app.services.processors.word import useDocX
 from app.config import settings
 
 class WordTask(Task):
@@ -82,34 +83,35 @@ async def _process_word(file_path):
     try:
         logger.info(f"Starting process_word task for {file_path}")
 
-        processors = []
-        parallel_processors = []
+        # processors = []
+        # parallel_processors = []
 
-        for proc in settings.WORD_PROCESSOR_PRIORITIZATION:
-            module_name, func_name = proc['processor'].rsplit('.', 1)
-            module = importlib.import_module(module_name)
-            processor_func = functools.partial(getattr(module, func_name))
-            proc['processor'] = processor_func
+        # for proc in settings.WORD_PROCESSOR_PRIORITIZATION:
+        #     module_name, func_name = proc['processor'].rsplit('.', 1)
+        #     module = importlib.import_module(module_name)
+        #     processor_func = functools.partial(getattr(module, func_name))
+        #     proc['processor'] = processor_func
 
-            if proc['parallel']:
-                parallel_processors.append(proc)
-            else:
-                processors.append(proc)
+        #     if proc['parallel']:
+        #         parallel_processors.append(proc)
+        #     else:
+        #         processors.append(proc)
 
-        if parallel_processors:
-            tasks = [process_with_fallbacks(file_path, [processor]) for processor in parallel_processors]
-            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        # if parallel_processors:
+        #     tasks = [process_with_fallbacks(file_path, [processor]) for processor in parallel_processors]
+        #     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
 
-            for task in pending:
-                task.cancel()
+        #     for task in pending:
+        #         task.cancel()
 
-            response = done.pop().result()
+        #     response = done.pop().result()
 
-            if not response['data']:
-                response = await process_with_fallbacks(file_path, processors)
-        else:
-            response = await process_with_fallbacks(file_path, processors)
+        #     if not response['data']:
+        #         response = await process_with_fallbacks(file_path, processors)
+        # else:
+        #     response = await process_with_fallbacks(file_path, processors)
 
+        response = await process_with_fallbacks(file_path, useDocX)
         logger.info(f"Processing result: {response}")
         return response
 

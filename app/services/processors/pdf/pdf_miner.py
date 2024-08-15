@@ -8,7 +8,8 @@ from app.models.pdf_model import PDFTextResponse, BoundingBox, coordinates
 from app.tasks.async_tasks import run_async_task
 from app.config import logger
 
-@app.task(bind=True, max_retries=3, default_retry_delay=5)
+# @app.task(bind=True, max_retries=3, default_retry_delay=5)
+@app.task()
 def usePDFMiner(self, file_path):
     """
     Extracts text and bounding boxes from a readable PDF using PDFMiner.

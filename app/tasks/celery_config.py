@@ -12,7 +12,11 @@ app = Celery(
     include=[
         'app.tasks.pdf_tasks',
         'app.tasks.excel_tasks',
-        'app.tasks.word_tasks'
+        'app.tasks.word_tasks',
+        'app.services.processors.pdf.muPDF',
+        'app.services.processors.pdf.pdf_miner',
+        'app.services.processors.pdf.textract',
+        'app.services.processors.pdf.tesseract',
     ]
 )
 
@@ -44,25 +48,26 @@ if platform.system() == 'Darwin':
         logger.info("Reinitializing resources after fork")
 
 # Function to start the Celery worker with improved error handling and retry mechanism
-def start_worker(max_retries=3, delay=5):
-    retries = 0
-    while retries < max_retries:
-        try:
-            logger.info("Starting Celery worker")
-            app.start()
-            break
-        except KeyboardInterrupt:
-            logger.info("Worker shutdown through keyboard interruption")
-            break
-        except Exception as e:
-            retries += 1
-            logger.error(f"Failed to start the Celery worker: {e}. Retry {retries}/{max_retries}")
-            if retries < max_retries:
-                logger.info(f"Retrying in {delay} seconds...")
-                time.sleep(delay)
-            else:
-                logger.error("Max retries reached. Exiting.")
-                break
+# def start_worker(max_retries=3, delay=5):
+def start_worker():
+#     retries = 0
+#     while retries < max_retries:
+    try:
+        logger.info("Starting Celery worker")
+        app.start()
+        # break
+    except KeyboardInterrupt:
+        logger.info("Worker shutdown through keyboard interruption")
+        # break
+    # except Exception as e:
+    #     retries += 1
+    #     logger.error(f"Failed to start the Celery worker: {e}. Retry {retries}/{max_retries}")
+    #     if retries < max_retries:
+    #         logger.info(f"Retrying in {delay} seconds...")
+    #         time.sleep(delay)
+    #     else:
+    #         logger.error("Max retries reached. Exiting.")
+    #         break
 
 if __name__ == '__main__':
     start_worker()

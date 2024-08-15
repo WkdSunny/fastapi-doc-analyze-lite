@@ -15,7 +15,8 @@ from app.tasks.celery_config import app
 from app.models.pdf_model import PDFTextResponse, BoundingBox, coordinates
 from app.tasks.async_tasks import run_async_task
 
-@app.task(bind=True, max_retries=3, default_retry_delay=5)
+# @app.task(bind=True, max_retries=3, default_retry_delay=5)
+@app.task()
 def useTesseract(self, file_path):
     """
     Process a PDF file to extract text using OCR.

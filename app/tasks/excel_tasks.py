@@ -10,6 +10,7 @@ from celery import shared_task, Task
 from app.config import settings, logger
 from app.tasks.async_tasks import run_async_task
 from app.tasks.celery_tasks import wait_for_celery_task
+from app.services.processors.excel import useOpenPyXL
 from app.config import settings
 
 class ExcelTask(Task):
@@ -83,35 +84,36 @@ async def _process_excel(file_path):
         logger.info(f"Starting process_excel task for {file_path}")
 
         # Dynamic processor loading based on configuration
-        processors = []
-        parallel_processors = []
+        # processors = []
+        # parallel_processors = []
 
-        for proc in settings.EXCEL_PROCESSOR_PRIORITIZATION:  # Use the imported PROCESSOR_PRIORITIZATION
-            module_name, func_name = proc['processor'].rsplit('.', 1)
-            module = importlib.import_module(module_name)
-            processor_func = functools.partial(getattr(module, func_name))
-            proc['processor'] = processor_func
+        # for proc in settings.EXCEL_PROCESSOR_PRIORITIZATION:  # Use the imported PROCESSOR_PRIORITIZATION
+        #     module_name, func_name = proc['processor'].rsplit('.', 1)
+        #     module = importlib.import_module(module_name)
+        #     processor_func = functools.partial(getattr(module, func_name))
+        #     proc['processor'] = processor_func
 
-            if proc['parallel']:
-                parallel_processors.append(proc)
-            else:
-                processors.append(proc)
+        #     if proc['parallel']:
+        #         parallel_processors.append(proc)
+        #     else:
+        #         processors.append(proc)
 
-        # Parallel processing for prioritized processors
-        if parallel_processors:
-            tasks = [process_with_fallbacks(file_path, [processor]) for processor in parallel_processors]
-            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        # # Parallel processing for prioritized processors
+        # if parallel_processors:
+        #     tasks = [process_with_fallbacks(file_path, [processor]) for processor in parallel_processors]
+        #     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
 
-            for task in pending:
-                task.cancel()
+        #     for task in pending:
+        #         task.cancel()
 
-            response = done.pop().result()
+        #     response = done.pop().result()
 
-            if not response['data']:
-                response = await process_with_fallbacks(file_path, processors)
-        else:
-            response = await process_with_fallbacks(file_path, processors)
+        #     if not response['data']:
+        #         response = await process_with_fallbacks(file_path, processors)
+        # else:
+        #    response = await process_with_fallbacks(file_path, processors)
 
+        response = await process_with_fallbacks(file_path, useOpenPyXL)
         logger.info(f"Processing result: {response}")
         return response
 
