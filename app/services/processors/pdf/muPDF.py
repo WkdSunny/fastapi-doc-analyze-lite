@@ -1,14 +1,15 @@
 # app/services/processors/pdf/muPDF.py
 
-from app.tasks.celery_config import app
-from app.config import logger
-from app.models.pdf_model import PDFTextResponse, BoundingBox, coordinates
-from app.tasks.async_tasks import run_async_task
 import fitz
 import asyncio
+from app.config import logger
+from app.configs.celery_config import app
+from app.models.pdf_model import PDFTextResponse, BoundingBox, coordinates
+from app.tasks.async_tasks import run_async_task
+
 
 # @app.task(bind=True, max_retries=3, default_retry_delay=5)
-@app.task
+@app.task(bind=True)
 def usePyMuPDF(self, file_path):
     """
     Extracts text and bounding boxes from a readable PDF using PyMuPDF (MuPDF).

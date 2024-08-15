@@ -3,13 +3,13 @@
 import asyncio
 from pdfminer.high_level import extract_pages
 from pdfminer.layout import LTTextContainer
-from app.tasks.celery_config import app
 from app.models.pdf_model import PDFTextResponse, BoundingBox, coordinates
 from app.tasks.async_tasks import run_async_task
+from app.configs.celery_config import app
 from app.config import logger
 
 # @app.task(bind=True, max_retries=3, default_retry_delay=5)
-@app.task()
+@app.task(bind=True)
 def usePDFMiner(self, file_path):
     """
     Extracts text and bounding boxes from a readable PDF using PDFMiner.

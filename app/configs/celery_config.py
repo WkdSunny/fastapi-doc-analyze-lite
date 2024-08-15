@@ -1,6 +1,7 @@
 # /app/configs/celery_config.py
 
 from celery import Celery
+from datetime import time
 from app.config import logger, settings
 
 # Initialize the Celery application
@@ -23,31 +24,43 @@ app.autodiscover_tasks(['app.tasks'])
 # Configure Celery settings
 app.conf.update(
     task_serializer='json',
-    accept_content=['json'],  # This configuration helps ensure that only JSON formatted messages are accepted for tasks
+    accept_content=['json'],
     result_serializer='json',
     timezone='Europe/London',
     enable_utc=True,
     broker_connection_retry_on_startup=True,
     worker_log_level='INFO',
+    task_acks_late=True,
+    worker_max_tasks_per_child=100,
 )
 
-# Ensure the module where 'process_pdf' is defined is imported
-# from app.services.processors.pdf import pdf_tasks
-# from app.services.processors.pdf.pdf_tasks import simple_task
-
-# @app.task(bind=True)
-# def debug_task(self):
-#     logger.info(f'Request: {self.request!r}')
-
 # Function to start the Celery worker
-def start_worker():
-    try:
-        logger.info("Starting Celery worker")
-        app.start()
-    except KeyboardInterrupt:
-        logger.info("Worker shutdown through keyboard interruption")
-    except Exception as e:
-        logger.error(f"Failed to start the Celery worker: {e}")
+def start_worker(max_retries=3, delay=5):
+    """
+    Start the Celery worker.
+
+    Args:
+        max_retries (int): The maximum number of retries to attempt.
+        delay (int): The delay between retries in seconds.
+    """
+    retries = 0
+    while retries < max_retries:
+        try:
+            logger.info("Starting Celery worker")
+            app.start()
+            break
+        except KeyboardInterrupt:
+            logger.info("Worker shutdown through keyboard interruption")
+            break
+        except Exception as e:
+            retries += 1
+            logger.error(f"Failed to start the Celery worker: {e}. Retry {retries}/{max_retries}")
+            if retries < max_retries:
+                logger.info(f"Retrying in {delay} seconds...")
+                time.sleep(delay)
+            else:
+                logger.error("Max retries reached. Exiting.")
+                break
 
 if __name__ == '__main__':
     start_worker()

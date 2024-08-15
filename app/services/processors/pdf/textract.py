@@ -5,14 +5,14 @@ This module defines the PDF processing task using AWS Textract.
 
 import asyncio
 from aiobotocore.session import AioSession
-from app.tasks.celery_config import app
+from app.configs.celery_config import app
 from app.models.pdf_model import PDFTextResponse, BoundingBox, coordinates
 from app.config import settings, logger
 from app.tasks.async_tasks import run_async_task
-from app.tasks.aws_services import upload_file_to_s3
+from app.services.aws_services import upload_file_to_s3
 
 # @app.task(bind=True, max_retries=3, default_retry_delay=5)
-@app.task()
+@app.task(bind=True)
 def useTextract(self, file_path):
     """
     Process PDFs with AWS Textract.
