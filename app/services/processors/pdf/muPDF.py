@@ -1,32 +1,22 @@
 # app/services/processors/pdf/muPDF.py
-"""
-This module defines the PDF processing task using PyMuPDF (MuPDF).
-"""
 
+from app.tasks.celery_config import app
+from app.config import logger
+from app.models.pdf_model import PDFTextResponse, BoundingBox, coordinates
+from app.tasks.async_tasks import run_async_task
 import fitz
 import asyncio
-from app.tasks.celery_config import app
-from app.models.pdf_model import PDFTextResponse, BoundingBox, coordinates
-from app.config import logger
-from app.utils.async_utils import run_async_task
 
-@app.task
-def usePyMuPDF(file_path):
+@app.task(bind=True, max_retries=3, default_retry_delay=5)
+def usePyMuPDF(self, file_path):
     """
     Extracts text and bounding boxes from a readable PDF using PyMuPDF (MuPDF).
-    Each text block's bounding box and text content are stored.
-
-    Args:
-    file_path (str): The path to the PDF file to be processed.
-
-    Returns:
-    dict: Contains the file name, concatenated text, and bounding boxes.
     """
     try:
         return run_async_task(_usePyMuPDF, file_path)
     except Exception as e:
         logger.error(f"Failed to extract from PDF using PyMuPDF: {e}")
-        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
+        raise self.retry(exc=e)
 
 async def _usePyMuPDF(file_path):
     """
@@ -42,7 +32,7 @@ async def _usePyMuPDF(file_path):
     try:
         text_and_boxes = []
         logger.info(f"Opening PDF with PyMuPDF: {file_path}")
-        # Use asyncio.to_thread to run the blocking operation in a separate thread
+
         doc = await asyncio.to_thread(fitz.open, file_path)
         for page_number, page in enumerate(doc, start=1):
             blocks = page.get_text("dict")["blocks"]
@@ -71,9 +61,3 @@ async def _usePyMuPDF(file_path):
     except Exception as e:
         logger.error(f"Failed to extract from PDF using PyMuPDF: {e}")
         return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
-
-# Example usage:
-if __name__ == "__main__":
-    path = "path/to/pdf"
-    result = usePyMuPDF(path)
-    print(result)

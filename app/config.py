@@ -1,17 +1,24 @@
+# /app/config.py
+
 import os
 import logging
 from logging.handlers import RotatingFileHandler
 from pymongo import MongoClient
 from dotenv import load_dotenv
+from urllib.parse import urlparse, urlunparse
 
 # Load environment variables
 load_dotenv()
 
 class Settings:
+    """Class to store application settings."""
+    # AWS Configuration
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
     AWS_S3_BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
     AWS_REGION = os.getenv("AWS_REGION")
+
+    # External API Configuration
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
     BEARER_TOKEN = os.getenv("API_TOKEN")
@@ -30,6 +37,59 @@ class Settings:
     # Initialize MongoDB client
     mongo_client = MongoClient(MONGO_URI)
     database = mongo_client[DATABASE_NAME]
+
+    # Define the URL for the question generation API
+    QUESTIONS_ENDPOINT = os.getenv("SELF_QUESTIONS_URI")
+
+    # Configuration for PDF Processor Prioritization
+    PDF_PROCESSOR_PRIORITIZATION = [
+        # {
+        #     'name': 'muPDF',
+        #     'processor': 'app.services.processors.pdf.muPDF.usePyMuPDF',
+        #     'parallel': True,  # Run in parallel with others
+        #     'success_rate': 0.95,  # Assumed success rate
+        #     'speed': 'fast',  # Assumed processing speed
+        # },
+        # {
+        #     'name': 'pdf_miner',
+        #     'processor': 'app.services.processors.pdf.pdf_miner.usePDFMiner',
+        #     'parallel': True,
+        #     'success_rate': 0.85,
+        #     'speed': 'medium',
+        # },
+        {
+            'name': 'textract',
+            'processor': 'app.services.processors.pdf.textract.useTextract',
+            'parallel': True,  # Sequential fallback
+            'success_rate': 0.70,
+            'speed': 'slow',
+        },
+        # {
+        #     'name': 'tesseract',
+        #     'processor': 'app.services.processors.pdf.tesseract.useTesseract',
+        #     'parallel': True,
+        #     'success_rate': 0.60,
+        #     'speed': 'slow',
+        # },
+    ]
+
+    EXCEL_PROCESSOR_PRIORITIZATION = [
+        {
+            'name': 'openpyxl',
+            'processor': 'app.services.processors.excel.openpyxl.useOpenpyxl',
+            'parallel': True,
+        },
+    ]
+
+    WORD_PROCESSOR_PRIORITIZATION = [
+        {
+            'name': 'python-docx',
+            'processor': 'app.services.processors.word.python_docx.usePythonDocx',
+            'parallel': True,
+        },
+    ]
+
+
 
 def setup_logging():
     """Set up the logging configuration."""
@@ -57,15 +117,24 @@ def setup_logging():
 
      # Set logging levels for specific modules
     logging.getLogger("botocore").setLevel(logging.WARNING)
-    logging.getLogger("celery").setLevel(logging.WARNING)
+    logging.getLogger("celery").setLevel(logging.DEBUG)
     logging.getLogger("aiobotocore").setLevel(logging.WARNING)
+    logging.getLogger("aiohttp").setLevel(logging.WARNING)
+    logging.getLogger("mongo").setLevel(logging.WARNING)
+    logging.getLogger("pymongo").setLevel(logging.WARNING)
+    logging.getLogger("BertForSequenceClassification").setLevel(logging.CRITICAL)
+    logging.getLogger("transformers").setLevel(logging.CRITICAL)
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("gunicorn").setLevel(logging.WARNING)
+    logging.getLogger("spacy").setLevel(logging.WARNING)
+
 
     return logger
 
 def init_db():
     """Initialize the database and collections."""
     try:
-        required_collections = ["Documents", "Segments", "Entities", "Topics", "Questions", "Answers", "Labels"]
+        required_collections = ["Documents", "Segments", "Entities", "DocumentClassification", "Topics", "TFIDFKeywords", "Questions", "Answers", "Labels"]
         database = Settings.database
 
         # Check if collections exist, if not, create them
@@ -80,6 +149,16 @@ def init_db():
         logger.error(f"Failed to connect to the database: {e}")
     except Exception as e:
         logger.error(f"An error occurred during database initialization: {e}")
+
+def get_base_url(url: str) -> str:
+    """
+    Extracts the base URL from a full URL, removing the path.
+    :param url: The full URL.
+    :return: The base URL without the path.
+    """
+    parsed_url = urlparse(url)
+    base_url = urlunparse((parsed_url.scheme, parsed_url.netloc, '', '', '', ''))
+    return base_url
 
 # Initialize the logger
 logger = setup_logging()

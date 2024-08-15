@@ -1,8 +1,6 @@
-# app/services/processors/pdf/tesseract.py
 """
 This module defines the Tesseract OCR processing task for PDF files.
 """
-
 
 import cv2
 import asyncio
@@ -15,10 +13,10 @@ from pdf2image import convert_from_path, exceptions as pdf_exceptions
 from app.config import logger
 from app.tasks.celery_config import app
 from app.models.pdf_model import PDFTextResponse, BoundingBox, coordinates
-from app.utils.async_utils import run_async_task
+from app.tasks.async_tasks import run_async_task
 
-@app.task
-def useTesseract(file_path):
+@app.task(bind=True, max_retries=3, default_retry_delay=5)
+def useTesseract(self, file_path):
     """
     Process a PDF file to extract text using OCR.
 
@@ -33,7 +31,8 @@ def useTesseract(file_path):
         return result
     except Exception as e:
         logger.error(f"Failed to process PDFs with Tesseract: {e}")
-        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
+        # Retry logic for large files or temporary issues
+        raise self.retry(exc=e)
 
 async def _useTesseract(file_path):
     """

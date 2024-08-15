@@ -1,20 +1,25 @@
-# convert.py
+# /app/routers/convert.py
 """
 This module defines the conversion routes for the FastAPI application.
 """
 
 import asyncio
-import aiofiles
-import filetype
 from typing import List, Dict, Any
-from datetime import datetime, timezone
-from fastapi import APIRouter, File, UploadFile, HTTPException
+from fastapi import APIRouter, File, UploadFile, HTTPException, Request
 from app.config import settings, logger
-from app.services.processors.word import useDocX
-from app.services.processors.excel import useOpenPyXL
-from app.utils.celery_utils import wait_for_celery_task
 from app.services.processors.pdf.textract import useTextract
-from app.services.processors.pdf.pdf_tasks import process_pdf
+from app.tasks.pdf_tasks import process_pdf
+from app.tasks.excel_tasks import process_excel
+from app.tasks.word_tasks import process_word
+from app.services.file_processing import save_temp_file, get_file_type, call_question_generation_api
+from app.services.document_classification import DocumentClassifier
+from app.services.entity_recognition import EntityRecognizer
+from app.services.document_segmentation import DocumentSegmenter
+from app.services.topic_modeling.pipeline import TopicModelingPipeline
+from app.services.tfidf_extraction import TFIDFExtractor
+from app.services.db.insert import insert_documents, insert_segments, insert_entities, insert_classification, insert_topics
+from app.tasks.celery_tasks import wait_for_celery_task
+from app.models.rag_model import Segment, Entity, Topic, Classification
 
 router = APIRouter(
     prefix="/convert",
@@ -23,52 +28,38 @@ router = APIRouter(
 
 database = settings.database
 
-async def save_temp_file(file: UploadFile) -> str:
+@router.post("/", response_model=Dict[str, Any])
+async def convert_files(request: Request, files: List[UploadFile] = File(...)):
     """
-    Save the uploaded file to a temporary path asynchronously.
+    Convert the uploaded files to text and process them for further analysis.
 
     Args:
-    file (UploadFile): The uploaded file.
+        request (Request): The incoming request object.
+        files (List[UploadFile]): The list of files to be processed.
 
     Returns:
-    str: The path to the temporary file.
-    """
-    temp_path = f"/tmp/{file.filename}"
-    async with aiofiles.open(temp_path, 'wb') as temp_file:
-        await temp_file.write(await file.read())
-    return temp_path
+        Dict[str, Any]: A dictionary containing the processing results.
 
-async def insert_document_and_segments(document_data: Dict[str, Any], segments: List[Dict[str, Any]]) -> str:
+    Raises:
+        HTTPException: If there's an error during the file processing.
     """
-    Insert the document data and its segments into the MongoDB database.
-    """
-    # Insert the document data into the Documents collection
-    document_id = database["Documents"].insert_one(document_data).inserted_id
-    
-    # Prepare segment data with document_id reference
-    for segment in segments:
-        segment["document_id"] = document_id
-    
-    # Insert the segments into the Segments collection
-    database["Segments"].insert_many(segments)
-    
-    return str(document_id)
-
-@router.post("/", response_model=Dict[str, Any])
-async def convert_files(files: List[UploadFile] = File(...)):
     responses = []
-    # unsupported_files = []
-    # failed_files = []
-    # success_files = []
+    segments_all: List[Segment] = []
+    entities_all: List[Entity] = []
+    topics_all: List[Topic] = []
+    classifications_all: List[Classification] = []
+
+    document_classifier = DocumentClassifier()
+    entity_recognizer = EntityRecognizer()
+    document_segmenter = DocumentSegmenter()
+    tfidf_extractor = TFIDFExtractor()
 
     for file in files:
         try:
             logger.info(f'Processing file: {file.filename}')
-            kind = filetype.guess(await file.read(2048))
-            if kind is None:
+            content_type = await get_file_type(file)
+            if content_type is None:
                 raise ValueError("Cannot determine file type")
-            content_type = kind.mime
-            await file.seek(0)
             logger.info(f"File type: {content_type}")
 
             # Save the file to a temporary path
@@ -80,47 +71,94 @@ async def convert_files(files: List[UploadFile] = File(...)):
                 logger.info(f"PDF file detected...")
                 task = process_pdf.delay(temp_path)
             elif 'excel' in content_type or 'spreadsheetml' in content_type:
-                task = useOpenPyXL.delay(temp_path)
+                task = process_excel.delay(temp_path)
             elif 'wordprocessingml' in content_type or 'msword' in content_type:
-                task = useDocX.delay(temp_path)
+                task = process_word.delay(temp_path)
             elif 'image' in content_type:
                 task = useTextract.delay(temp_path)
             else:
-                # unsupported_files.append(file.filename)
                 logger.error(f"Unsupported file type: {file.filename}")
                 continue
 
-            result = {"document_id": None}
-            result.update(await wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT))
-            # success_files.append(file.filename)
-
-            # Prepare document data and segments
-            document_data = {
-                "file_name": file.filename,
-                "uploaded_at": datetime.now(timezone.utc),
-                "text": result["text"],  # Extracted text
-                "status": "processed"
+            result = {
+                "document_id": None,
+                "classification": {},
             }
+            result.update(await wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT))
 
-            segments = []
-            for bbox in result["bounding_boxes"]:
-                segment = {
-                    "page": bbox["page"],
-                    "bbox": bbox["bbox"],
-                    "text": bbox["text"],
-                    "confidence": bbox["confidence"]
-                }
-                segments.append(segment)
-            
-            # Insert data into MongoDB
-            document_id = await insert_document_and_segments(document_data, segments)
-            logger.info(f"Inserted document with ID: {document_id} into the database")
+            # # Prepare document data and segments
+            # document_id = await insert_documents(file.filename, result["text"])
+            # logger.info(f"Inserted document with ID: {document_id} into the database")
 
-            result["document_id"] = document_id
+            # segments: List[Segment] = await document_segmenter.segment_document(result, content_type)
+            # segments_all.extend(segments)
+
+            # # Perform Entity Recognition on the extracted text
+            # entities: List[Entity] = await entity_recognizer.recognize_entities(result["text"])
+            # entities_all.extend(entities)
+
+            # # Classify the document based on its content
+            # classification: Classification = await document_classifier.classify_document(result["text"])
+            # classifications_all.append({
+            #     "document_id": document_id,
+            #     "classification": classification
+            # })
+            # logger.info(f"Classified document with ID: {document_id} as {classification.label}")
+
+            # doc_type = {
+            #     "label": classification.label,
+            #     "score": classification.score
+            # }
+
+            # result["document_id"] = document_id
+            # result["classification"] = doc_type
             responses.append(result)
+
         except Exception as e:
-            # failed_files.append(file.filename)
             logger.error(f"Failed to process file {file.filename}: {e}")
+
+    # After processing all files, insert data into the database
+    # if segments_all:
+    #     await insert_segments(document_id, segments_all)
+    # # document_segmenter.unload()
+
+    # if entities_all:
+    #     await insert_entities(document_id, entities_all)
+    #     logger.info(f"Inserted {len(entities_all)} entities for documents.")
+    # entity_recognizer.unload()
+
+    # for classification_data in classifications_all:
+    #     await insert_classification(classification_data["document_id"], classification_data["classification"])
+    #     logger.info(f"Classified document with ID: {classification_data['document_id']}")
+    # document_classifier.unload()
+
+    # # Example text documents extracted after processing
+    # extracted_texts = [result["text"] for result in responses]
+    # logger.info(f"Extracted texts: {extracted_texts}")
+
+    # # Run topic modeling
+    # topic_modeling_pipeline = TopicModelingPipeline(num_topics=5, passes=10)
+    # topics_all = topic_modeling_pipeline.run(extracted_texts)
+
+    # # Store topics in the database
+    # for result in responses:
+    #     document_id = result["document_id"]
+    #     await insert_topics(document_id, topics_all)  # Insert topics for each document
+    #     logger.info(f"Inserted topics for document ID: {document_id}")
+
+    # 
+
+    # Generate questions
+    # entity_words = [entity.word for entity in entities_all]
+    # topic_words = [word for topic in topics_all for word in topic.words]
+    # logger.info(f"Entities from convert: {entity_words}, Topics from convert: {topic_words}")
+    # await call_question_generation_api(
+    #     request, 
+    #     document_id, 
+    #     entity_words, 
+    #     topic_words
+    # )
+    # logger.info(f"Questions generated for document ID: {document_id}")
 
     if not responses:
         raise HTTPException(status_code=500, detail="No files processed successfully")
@@ -128,12 +166,9 @@ async def convert_files(files: List[UploadFile] = File(...)):
     return {
         "status": 200,
         "success": True,
-        # "unsupported_files": unsupported_files,
-        # "conversion_failed": failed_files,
         "result": responses
     }
 
-# Example usage:
 if __name__ == "__main__":
     files = [
         UploadFile(filename="sample.pdf", content_type="application/pdf"),

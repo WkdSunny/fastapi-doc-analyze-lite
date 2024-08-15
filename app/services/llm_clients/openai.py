@@ -30,6 +30,7 @@ async def send_openai_request(messages: dict) -> dict:
             payload = {
                 "model": "gpt-4-turbo",
                 "messages": messages,
+                "max_tokens": 1000,
                 "temperature": 0.0
             }
             logger.debug(f'Payload being sent to OpenAI API: {json.dumps(payload, indent=2)}')
@@ -103,10 +104,6 @@ async def extract_with_openai(text: str, prompt: str) -> dict:
 
         raw_response = result['response']['choices'][0]['message']['content']
         return raw_response.strip()
-
-    except ValueError as ve:
-        logger.error(f"ValueError: {ve}")
-        raise ve
 
     except Exception as e:
         logger.error(f"An error occurred: {e}")

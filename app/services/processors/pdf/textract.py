@@ -1,18 +1,18 @@
-# app/services/processors/pdf/textract.py
+# /app/services/processors/pdf/textract.py
 """
 This module defines the PDF processing task using AWS Textract.
 """
 
 import asyncio
-from app.tasks.celery_config import app
 from aiobotocore.session import AioSession
+from app.tasks.celery_config import app
 from app.models.pdf_model import PDFTextResponse, BoundingBox, coordinates
 from app.config import settings, logger
-from app.utils.async_utils import run_async_task
+from app.tasks.async_tasks import run_async_task
 from app.tasks.aws_services import upload_file_to_s3
 
-@app.task
-def useTextract(file_path):
+@app.task(bind=True, max_retries=3, default_retry_delay=5)
+def useTextract(self, file_path):
     """
     Process PDFs with AWS Textract.
 
@@ -27,7 +27,8 @@ def useTextract(file_path):
         return result
     except Exception as e:
         logger.error(f"Failed to process PDFs with Textract: {e}")
-        return PDFTextResponse(file_name=file_path, text="", bounding_boxes=[]).to_dict()
+        # Retry logic for large files or temporary issues
+        raise self.retry(exc=e)
 
 async def _useTextract(file_path):
     """
@@ -41,14 +42,14 @@ async def _useTextract(file_path):
     """
     try:
         logger.info("Processing PDFs with Textract")
-        
+
         # Upload file to S3
         s3_file_key = await upload_file_to_s3(file_path)
         logger.info(f"Uploaded file to S3 with key: {s3_file_key}")
-        
+
         # Prepare the document reference for Textract
         document = {'Bucket': settings.AWS_S3_BUCKET_NAME, 'Name': s3_file_key}
-        
+
         session = AioSession()
         async with session.create_client('textract', region_name=settings.AWS_REGION,
                                          aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
@@ -99,12 +100,18 @@ async def get_result(client, job_id):
     dict: Textract response.
     """
     try:
+        attempts = 0
         while True:
             response = await client.get_document_text_detection(JobId=job_id)
             logger.info(f"Job Status for {job_id}: {response['JobStatus']}")
             if response['JobStatus'] in ['SUCCEEDED', 'FAILED']:
                 break
-            await asyncio.sleep(5)  # Reduce frequency of checks to avoid rate limits
+            attempts += 1
+            if attempts > 5:
+                logger.warning(f"Too many attempts for Job ID {job_id}. Increasing wait time.")
+                await asyncio.sleep(10)
+            else:
+                await asyncio.sleep(5)
         logger.info(f"Retrieved document text detection result for Job ID {job_id}")
         return response
     except Exception as e:
