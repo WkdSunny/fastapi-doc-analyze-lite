@@ -45,28 +45,28 @@ class Settings:
     PDF_PROCESSOR_PRIORITIZATION = [
         {
             'name': 'muPDF',
-            'processor': 'app.services.processors.pdf.muPDF.usePyMuPDF',
+            'processor': 'app.services.document_processors.pdf.muPDF.usePyMuPDF',
             'parallel': True,  # Run in parallel with others
             'success_rate': 0.95,  # Assumed success rate
             'speed': 'fast',  # Assumed processing speed
         },
         {
             'name': 'pdf_miner',
-            'processor': 'app.services.processors.pdf.pdf_miner.usePDFMiner',
+            'processor': 'app.services.document_processors.pdf.pdf_miner.usePDFMiner',
             'parallel': True,
             'success_rate': 0.85,
             'speed': 'medium',
         },
         {
             'name': 'textract',
-            'processor': 'app.services.processors.pdf.textract.useTextract',
+            'processor': 'app.services.document_processors.pdf.textract.useTextract',
             'parallel': False,  # Sequential fallback
             'success_rate': 0.70,
             'speed': 'slow',
         },
         {
             'name': 'tesseract',
-            'processor': 'app.services.processors.pdf.tesseract.useTesseract',
+            'processor': 'app.services.document_processors.pdf.tesseract.useTesseract',
             'parallel': True,
             'success_rate': 0.60,
             'speed': 'slow',
@@ -76,14 +76,14 @@ class Settings:
     IMG_PROCESSOR_PRIORITIZATION = [
         {
             'name': 'textract',
-            'processor': 'app.services.processors.pdf.textract.useTextract',
+            'processor': 'app.services.document_processors.pdf.textract.useTextract',
             'parallel': False,  # Sequential fallback
             'success_rate': 0.70,
             'speed': 'slow',
         },
         {
             'name': 'tesseract',
-            'processor': 'app.services.processors.pdf.tesseract.useTesseract',
+            'processor': 'app.services.document_processors.pdf.tesseract.useTesseract',
             'parallel': True,
             'success_rate': 0.60,
             'speed': 'slow',
@@ -93,7 +93,7 @@ class Settings:
     EXCEL_PROCESSOR_PRIORITIZATION = [
         {
             'name': 'openpyxl',
-            'processor': 'app.services.processors.excel.openpyxl.useOpenpyxl',
+            'processor': 'app.services.document_processors.excel.openpyxl.useOpenpyxl',
             'parallel': True,
         },
     ]
@@ -101,7 +101,7 @@ class Settings:
     WORD_PROCESSOR_PRIORITIZATION = [
         {
             'name': 'python-docx',
-            'processor': 'app.services.processors.word.python_docx.usePythonDocx',
+            'processor': 'app.services.document_processors.word.python_docx.usePythonDocx',
             'parallel': True,
         },
     ]
