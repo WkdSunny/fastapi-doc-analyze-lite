@@ -1,72 +1,59 @@
-# /app/models/db.model.py
 """
 This module defines the Pydantic models for the database operations.
 """
 
-from pydantic import BaseModel
-from typing import List, Dict, Optional
+from pydantic import BaseModel, Field
+from typing import List, Optional
+from bson import ObjectId
 
-class Document(BaseModel):
-    """
-    Represents a document with metadata and text content.
-    """
+class MongoBaseModel(BaseModel):
+    id: Optional[ObjectId] = Field(default_factory=ObjectId, alias="_id")
+
+    class Config:
+        json_encoders = {
+            ObjectId: str,
+        }
+        orm_mode = True
+
+class Document(MongoBaseModel):
     file_name: str
     uploaded_at: str
     text: str
     status: str
 
-class BoundingBox(BaseModel):
-    """
-    Represents the bounding box coordinates for a segment of a document.
-    Used for PDFs or image-based documents.
-    """
-    left: Optional[float]
-    top: Optional[float]
-    width: Optional[float]
-    height: Optional[float]
-
-class Segment(BaseModel):
-    """
-    Represents a segment of a document, including optional page and bounding box information.
-    Used for both PDF/image documents (with bounding boxes) and text/Excel documents.
-    """
+class Segment(MongoBaseModel):
     document_id: str
+    serial: int
     page: Optional[int] = None
-    bbox: Optional[BoundingBox] = None
+    bbox: Optional[dict] = None  # Assuming bounding boxes are dictionaries
     text: str
     confidence: float
 
-class Entity(BaseModel):
-    """
-    Represents an entity extracted from a document.
-    """
+class Entity(MongoBaseModel):
     document_id: str
+    serial: int
     word: str
     entity: str
     score: float
-    start: int
-    end: int
+    start: Optional[int] = None
+    end: Optional[int] = None
 
-class Topic(BaseModel):
-    """
-    Represents a topic generated from a document.
-    """
-    document_id: str
-    key: int
-    terms: List[str]
-
-class Classification(BaseModel):
-    """
-    Represents a classification result for a document.
-    """
+class Classification(MongoBaseModel):
     document_id: str
     label: str
     score: float
 
-class Question(BaseModel):
-    """
-    Pydantic model for the question generation request.
-    """
+class Topic(MongoBaseModel):
     document_id: str
-    entities: List[str]
-    topics: Dict[int, List[str]]
+    serial: int
+    words: List[str]
+
+class TFIDF(MongoBaseModel):
+    document_id: str
+    keyword: str
+
+class Question(MongoBaseModel):
+    document_id: str
+    serial: int
+    question: str
+    score: float

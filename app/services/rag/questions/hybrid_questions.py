@@ -80,6 +80,8 @@ class IntegratedQuestionGeneration:
                 added_confidence_score = await self.question_evaluator.combined_evaluation(question)
                 questions_with_scores.append(added_confidence_score)
 
+            # Insert the questions into the database
+            await insert_questions(document_id, questions_with_scores)
             return questions_with_scores
         except Exception as e:
             raise RuntimeError(f"Error generating questions: {e}")

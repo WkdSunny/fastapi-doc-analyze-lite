@@ -1,3 +1,8 @@
+# /app/utils/db_utils.py
+"""
+This module defines utility functions for interacting with the MongoDB database.
+"""
+
 from app.config import database
 
 def insert_document(collection_name, data):
