@@ -1,12 +1,9 @@
 import aiofiles
 import filetype
 from fastapi import UploadFile, Request, HTTPException
-from typing import List, Dict, Any
+from typing import List
 from app.utils.api_utils import AsyncAPIClient
-from app.utils.json_utils import serialize
 from app.config import settings, logger, get_base_url
-
-database = settings.database
 
 async def save_temp_file(file: UploadFile) -> str:
     """

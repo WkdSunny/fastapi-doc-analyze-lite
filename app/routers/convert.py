@@ -7,6 +7,7 @@ import asyncio
 from typing import List, Dict, Any
 from fastapi import APIRouter, File, UploadFile, HTTPException, Request
 from app.config import settings, logger
+from app.config import logger
 from app.services.document_processors.pdf.textract import useTextract
 from app.tasks.pdf_tasks import process_pdf
 from app.tasks.excel_tasks import process_excel
@@ -27,7 +28,7 @@ router = APIRouter(
     tags=["convert"]
 )
 
-database = settings.database
+# database = settings.database
 
 @router.post("/", response_model=Dict[str, Any])
 async def convert_files(request: Request, files: List[UploadFile] = File(...)):

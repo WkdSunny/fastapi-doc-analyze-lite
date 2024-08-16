@@ -8,8 +8,6 @@ from datetime import datetime, timezone
 from app.models.rag_model import Segment, Entity, Topic, Classification, RAGQuestionGenerator
 from app.config import settings, logger
 
-database = settings.database
-
 async def insert_documents(file_name: str, result_text: str) -> str:
     """
     Insert the document data and its segments into the MongoDB database.
@@ -31,7 +29,7 @@ async def insert_documents(file_name: str, result_text: str) -> str:
             "text": result_text,
             "status":"processed"
         }
-        document_id = database["Documents"].insert_one(document_data).inserted_id
+        document_id = settings.mongo_client["Documents"].insert_one(document_data).inserted_id
         logger.info(f"Successfully inserted document with ID: {document_id}")
         return str(document_id)
     except Exception as e:
@@ -53,7 +51,7 @@ async def insert_task(document_ids: List[str]):
             "document_ids": document_ids,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-        task_id = database["Tasks"].insert_one(task_data).inserted_id
+        task_id = settings.mongo_client["Tasks"].insert_one(task_data).inserted_id
         logger.info(f"Successfully inserted task with ID: {task_id}")
         return str(task_id)
 
@@ -79,7 +77,7 @@ async def insert_segments(document_id: str, segments: List[Segment]):
             segment["document_id"] = document_id
         
         # Insert the segments into the Segments collection
-        database["Segments"].insert_many(segment_dicts)
+        settings.mongo_client["Segments"].insert_many(segment_dicts)
         logger.info(f"Successfully inserted {len(segment_dicts)} segments for document ID: {document_id}")
     
     except Exception as e:
@@ -104,7 +102,7 @@ async def insert_entities(document_id: Optional[str], entities: List[Entity]):
             entity["document_id"] = document_id
         
         # Insert the entities into the Entities collection
-        database["Entities"].insert_many(entity_dicts)
+        settings.mongo_client["Entities"].insert_many(entity_dicts)
         logger.info(f"Successfully inserted {len(entity_dicts)} entities for document ID: {document_id}")
     
     except Exception as e:
@@ -132,7 +130,7 @@ async def insert_classification(document_id: str, classification: Classification
         }
         
         # Insert the classification record into the DocumentClassification collection
-        database["DocumentClassification"].insert_one(classification_record)
+        settings.mongo_client["DocumentClassification"].insert_one(classification_record)
         logger.info(f"Successfully inserted classification for document ID: {document_id}")
     
     except Exception as e:
@@ -157,7 +155,7 @@ async def insert_topics(document_id: Optional[str], topics: List[Topic]):
             topic["document_id"] = document_id
         
         # Insert the topic records into the Topics collection
-        database["Topics"].insert_many(topic_records)
+        settings.mongo_client["Topics"].insert_many(topic_records)
         logger.info(f"Successfully inserted {len(topic_records)} topics for document ID: {document_id}")
 
     except Exception as e:
@@ -173,7 +171,7 @@ async def insert_tf_idf_keywords(document_id: Optional[str], keywords: List[str]
         keyword_records = [{"document_id": document_id, "keyword": keyword} for keyword in keywords]
         
         # Insert the keyword records into the TFIDFKeywords collection
-        database["TFIDFKeywords"].insert_many(keyword_records)
+        settings.mongo_client["TFIDFKeywords"].insert_many(keyword_records)
         logger.info(f"Successfully inserted {len(keyword_records)} TF-IDF keywords for document ID: {document_id}")
 
     except Exception as e:
@@ -201,7 +199,7 @@ async def insert_questions(document_id: str, questions: List[RAGQuestionGenerato
             } 
             for q in questions
         ]
-        database["Questions"].insert_many(formatted_questions)
+        settings.mongo_client["Questions"].insert_many(formatted_questions)
 
         logger.info("Successfully inserted questions into the database.")
 

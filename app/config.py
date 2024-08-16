@@ -1,156 +1,93 @@
-# /app/config.py
-
 import os
 import logging
-from logging.handlers import RotatingFileHandler
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from urllib.parse import urlparse, urlunparse
+from pymongo.errors import PyMongoError
+from logging.handlers import RotatingFileHandler
 
 # Load environment variables
 load_dotenv()
 
-class Settings:
-    """Class to store application settings."""
-    # AWS Configuration
+class MongoClientSingleton:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls, *args, **kwargs)
+            cls._instance.client = MongoClient(os.getenv("MONGO_URI"))
+        return cls._instance
+
+    def get_database(self, db_name):
+        return self._instance.client[db_name]
+
+    def close(self):
+        logger.info("MongoDB client connection closed.")
+        self._instance.client.close()
+
+class AWSSettings:
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
     AWS_S3_BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
     AWS_REGION = os.getenv("AWS_REGION")
 
-    # External API Configuration
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
-    BEARER_TOKEN = os.getenv("API_TOKEN")
-    REDIS_URL = os.getenv("REDIS_URL")
-    PDF_PROCESSING_TIMEOUT = int(os.getenv("PDF_PROCESSING_TIMEOUT", 600))  # Default to 180 seconds
+class DBSettings:
+    mongo_client = MongoClientSingleton().get_database(os.getenv("DATABASE_NAME"))
 
-    # Define the path for log files
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Gets the directory where the script resides
+class LoggingSettings:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     LOG_DIRECTORY = os.path.join(BASE_DIR, "logs")
     LOG_FILE = "api.log"
+    os.makedirs(LOG_DIRECTORY, exist_ok=True)       # Ensure the log directory exists
 
-    # Define DB settings
-    MONGO_URI = os.getenv("MONGO_URI")
-    DATABASE_NAME = os.getenv("DATABASE_NAME")
+# Initialize the logger
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
-    # Initialize MongoDB client
-    mongo_client = MongoClient(MONGO_URI)
-    database = mongo_client[DATABASE_NAME]
+if os.getenv("ENV") == "production":
+    logger.setLevel(logging.WARNING)
 
-    # Define the URL for the question generation API
-    QUESTIONS_ENDPOINT = os.getenv("SELF_QUESTIONS_URI")
+file_handler = RotatingFileHandler(
+    os.path.join(LoggingSettings.LOG_DIRECTORY, LoggingSettings.LOG_FILE),
+    maxBytes=5 * 1024 * 1024, 
+    backupCount=10
+)
+file_handler.setLevel(logging.DEBUG)
 
-    # Configuration for PDF Processor Prioritization
-    # PDF_PROCESSOR_PRIORITIZATION = [
-    #     {
-    #         'name': 'muPDF',
-    #         'processor': 'app.services.document_processors.pdf.muPDF.usePyMuPDF',
-    #         'parallel': True,  # Run in parallel with others
-    #         'success_rate': 0.95,  # Assumed success rate
-    #         'speed': 'fast',  # Assumed processing speed
-    #         'timeout': PDF_PROCESSING_TIMEOUT,  # Timeout in seconds
-    #     },
-    #     {
-    #         'name': 'pdf_miner',
-    #         'processor': 'app.services.document_processors.pdf.pdf_miner.usePDFMiner',
-    #         'parallel': True,
-    #         'success_rate': 0.85,
-    #         'speed': 'medium',
-    #         'timeout': PDF_PROCESSING_TIMEOUT,
-    #     },
-    #     {
-    #         'name': 'textract',
-    #         'processor': 'app.services.document_processors.pdf.textract.useTextract',
-    #         'parallel': False,  # Sequential fallback
-    #         'success_rate': 0.70,
-    #         'speed': 'slow',
-    #         'timeout': 10000,
-    #     },
-    #     {
-    #         'name': 'tesseract',
-    #         'processor': 'app.services.document_processors.pdf.tesseract.useTesseract',
-    #         'parallel': False,
-    #         'success_rate': 0.60,
-    #         'speed': 'slow',
-    #         'timeout': 10000,
-    #     },
-    # ]
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
 
-    # IMG_PROCESSOR_PRIORITIZATION = [
-    #     {
-    #         'name': 'textract',
-    #         'processor': 'app.services.document_processors.pdf.textract.useTextract',
-    #         'parallel': False,  # Sequential fallback
-    #         'success_rate': 0.70,
-    #         'speed': 'slow',
-    #     },
-    #     {
-    #         'name': 'tesseract',
-    #         'processor': 'app.services.document_processors.pdf.tesseract.useTesseract',
-    #         'parallel': True,
-    #         'success_rate': 0.60,
-    #         'speed': 'slow',
-    #     },
-    # ]
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
 
-    # EXCEL_PROCESSOR_PRIORITIZATION = [
-    #     {
-    #         'name': 'openpyxl',
-    #         'processor': 'app.services.document_processors.excel.openpyxl.useOpenpyxl',
-    #         'parallel': True,
-    #     },
-    # ]
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
-    # WORD_PROCESSOR_PRIORITIZATION = [
-    #     {
-    #         'name': 'python-docx',
-    #         'processor': 'app.services.document_processors.word.python_docx.usePythonDocx',
-    #         'parallel': True,
-    #     },
-    # ]
+logging.getLogger("botocore").setLevel(logging.WARNING)
+logging.getLogger("celery").setLevel(logging.WARNING)
+logging.getLogger("aiobotocore").setLevel(logging.WARNING)
+logging.getLogger("aiohttp").setLevel(logging.WARNING)
+logging.getLogger("mongo").setLevel(logging.WARNING)
+logging.getLogger("pymongo").setLevel(logging.WARNING)
+logging.getLogger("BertForSequenceClassification").setLevel(logging.CRITICAL)
+logging.getLogger("transformers").setLevel(logging.CRITICAL)
+logging.getLogger("uvicorn").setLevel(logging.WARNING)
+logging.getLogger("gunicorn").setLevel(logging.WARNING)
+logging.getLogger("spacy").setLevel(logging.WARNING)
 
+class Settings(AWSSettings, DBSettings, LoggingSettings):
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
+    REDIS_URL = os.getenv("REDIS_URL")
+    PDF_PROCESSING_TIMEOUT = int(os.getenv("PDF_PROCESSING_TIMEOUT", 600))
+    BEARER_TOKEN = os.getenv("API_TOKEN")
 
-
-def setup_logging():
-    """Set up the logging configuration."""
-    os.makedirs(Settings.LOG_DIRECTORY, exist_ok=True)  # Ensure the log directory exists
-    log_file_path = os.path.join(Settings.LOG_DIRECTORY, Settings.LOG_FILE)
-
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)  # Set global level to DEBUG to capture all logs
-
-    # Create handlers
-    file_handler = RotatingFileHandler(log_file_path, maxBytes=1048576, backupCount=5)
-    file_handler.setLevel(logging.DEBUG)  # Set file handler level to DEBUG
-
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.DEBUG)  # Set console handler level to DEBUG
-
-    # Create formatters and add them to handlers
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
-    file_handler.setFormatter(formatter)
-    console_handler.setFormatter(formatter)
-
-    # Add handlers to the logger
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-
-     # Set logging levels for specific modules
-    logging.getLogger("botocore").setLevel(logging.WARNING)
-    logging.getLogger("celery").setLevel(logging.WARNING)
-    logging.getLogger("aiobotocore").setLevel(logging.WARNING)
-    logging.getLogger("aiohttp").setLevel(logging.WARNING)
-    logging.getLogger("mongo").setLevel(logging.WARNING)
-    logging.getLogger("pymongo").setLevel(logging.WARNING)
-    logging.getLogger("BertForSequenceClassification").setLevel(logging.CRITICAL)
-    logging.getLogger("transformers").setLevel(logging.CRITICAL)
-    logging.getLogger("uvicorn").setLevel(logging.WARNING)
-    logging.getLogger("gunicorn").setLevel(logging.WARNING)
-    logging.getLogger("spacy").setLevel(logging.WARNING)
-
-
-    return logger
+# Helper function to get the base URL
+def get_base_url(url: str) -> str:
+    parsed_url = urlparse(url)
+    base_url = urlunparse((parsed_url.scheme, parsed_url.netloc, '', '', '', ''))
+    return base_url
 
 def init_db():
     """Initialize the database and collections."""
@@ -167,7 +104,7 @@ def init_db():
             "Answers", 
             "Labels"
         ]
-        database = Settings.database
+        database = settings.mongo_client
 
         # Check if collections exist, if not, create them
         existing_collections = database.list_collection_names()
@@ -177,21 +114,9 @@ def init_db():
                 logger.info(f"Created collection: {collection}")
 
         logger.info("Database initialized successfully")
-    except ConnectionError as e:
+    except PyMongoError as e:
         logger.error(f"Failed to connect to the database: {e}")
     except Exception as e:
         logger.error(f"An error occurred during database initialization: {e}")
 
-def get_base_url(url: str) -> str:
-    """
-    Extracts the base URL from a full URL, removing the path.
-    :param url: The full URL.
-    :return: The base URL without the path.
-    """
-    parsed_url = urlparse(url)
-    base_url = urlunparse((parsed_url.scheme, parsed_url.netloc, '', '', '', ''))
-    return base_url
-
-# Initialize the logger
-logger = setup_logging()
 settings = Settings()

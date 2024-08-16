@@ -23,7 +23,6 @@ router = APIRouter(
     tags=["convert"]
 )
 
-database = settings.database
 document_segmenter = DocumentSegmenter()
 document_classifier = DocumentClassifier()
 

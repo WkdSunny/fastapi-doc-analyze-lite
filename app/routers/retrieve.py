@@ -3,10 +3,16 @@
 This module defines the data retrieval service for the FastAPI application.
 """
 
+from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
 from typing import List, Optional
 from app.services.retrieve import db_retrieve_data
 from app.config import logger
+
+class RetrieveRequest(BaseModel):
+    document_id: str
+    retrieve_data: List[str]
+    linked: Optional[bool] = False
 
 router = APIRouter(
     prefix="/retrieve",
@@ -16,7 +22,7 @@ router = APIRouter(
 VALID_RETRIEVE_OPTIONS = ["document", "segment", "entity", "classification", "topics", "tfidf", "questions"]
 
 @router.post("/")
-async def retrieve_endpoint(document_id: str, retrieve_data: List[str], linked: bool = False):
+async def retrieve_endpoint(payload: RetrieveRequest):
     """
     Retrieve data from the database based on document_id and requested data types.
 
@@ -31,6 +37,10 @@ async def retrieve_endpoint(document_id: str, retrieve_data: List[str], linked: 
     Raises:
         HTTPException: If an error occurs during data retrieval or if input is invalid.
     """
+    document_id = payload.document_id
+    retrieve_data = payload.retrieve_data
+    linked = payload.linked
+    
     # Input validation
     if not document_id:
         raise HTTPException(status_code=400, detail="Document ID must be provided.")
