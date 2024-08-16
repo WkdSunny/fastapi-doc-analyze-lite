@@ -132,7 +132,7 @@ async def handle_segmentation(document_id: str, result: Dict[str, Any], content_
         content_type (str): The content type of the document.
     """
     try:
-        segments: List[Segment] = await document_segmenter.segment_document(result["text"], content_type)
+        segments: List[Segment] = await document_segmenter.segment_document(result, content_type)
         await insert_segments(document_id, segments)
         logger.info(f"Successfully segmented and inserted segments for document ID: {document_id}")
     except Exception as e:

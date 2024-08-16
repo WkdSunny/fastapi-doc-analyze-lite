@@ -17,7 +17,7 @@ async def save_temp_file(file: UploadFile) -> str:
 async def get_file_type(file: UploadFile) -> str:
     kind = filetype.guess(await file.read(2048))
     await file.seek(0)  # Reset file pointer after reading
-    return kind.mime if kind else None
+    return kind.mime.lower() if kind else None
 
 async def call_question_generation_api(request: Request, document_id: str, entities: List[str], topics: List[str]):
     """

@@ -7,6 +7,7 @@ import spacy
 import torch
 from typing import List, Dict, Any
 from app.models.rag_model import Segment, BoundingBox
+from app.models.pdf_model import PDFTextResponse
 from app.config import logger
 
 class DocumentSegmenter:
@@ -48,7 +49,7 @@ class DocumentSegmenter:
             text = result["text"]
             segments = []
             
-            if document_type in ['pdf', 'image']:
+            if "pdf" in document_type or "image" in document_type:
                 segments = self._segment_with_bounding_boxes(result)
             else:
                 segments = self._segment_with_spacy(text)
@@ -72,6 +73,7 @@ class DocumentSegmenter:
             Exception: If there's an error during the segmentation process.
         """
         try:
+            logger.info("Segmenting document using bounding boxes.")
             segments = [
                 Segment(
                     serial=index,
@@ -106,6 +108,8 @@ class DocumentSegmenter:
             Exception: If there's an error during the segmentation process.
         """
         try:
+            logger.info("Segmenting document using spaCy.")
+            
             doc = self.nlp(text)
             segments = [
                 Segment(

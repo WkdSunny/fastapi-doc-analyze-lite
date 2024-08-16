@@ -4,7 +4,8 @@ This module defines the Pydantic models for the question generation routes.
 """
 
 from pydantic import BaseModel
-from typing import List, Dict, Optional
+from typing import List, Optional
+from app.models.pdf_model import coordinates
 
 class Document(BaseModel):
     """
@@ -20,10 +21,10 @@ class BoundingBox(BaseModel):
     Represents the bounding box coordinates for a segment of a document.
     Used for PDFs or image-based documents.
     """
-    left: Optional[float] = None
-    top: Optional[float] = None
-    width: Optional[float] = None
-    height: Optional[float] = None
+    left: Optional[float] = 0.0
+    top: Optional[float] = 0.0
+    width: Optional[float] = 0.0
+    height: Optional[float] = 0.0
 
 class Segment(BaseModel):
     """
