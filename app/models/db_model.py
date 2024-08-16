@@ -64,3 +64,7 @@ class Question(MongoBaseModel):
     serial: int
     question: str
     score: float
+    entities: List[str]
+    topics: List[str]
+    tfidf_keywords: List[str]
+    

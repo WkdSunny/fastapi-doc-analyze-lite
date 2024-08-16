@@ -3,7 +3,7 @@
 This module defines the Pydantic models for the question generation routes.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from app.models.pdf_model import coordinates
 
@@ -59,15 +59,36 @@ class Topic(BaseModel):
     serial: int
     words: List[str]
 
-class RAGQuestionRequest(BaseModel):
+class GeneratedQuestion(BaseModel):
     """
-    Represents a request to generate questions from a document segment.
+    Represents a single generated question with its score.
+    """
+    question_no: int
+    question: str
+    score: Optional[float] = None
+
+class GeneratedQuestionsWithScores(BaseModel):
+    """
+    Represents a list of generated questions with their scores.
+    """
+    questions: List[GeneratedQuestion]
+    average_score: Optional[float] = Field(None, description="The average score of all generated questions")
+    combined_score: Optional[float] = Field(None, description="The combined score of all generated questions")
+    combined_keywords: List[str]
+
+class QuestionGenerationResult(BaseModel):
+    """
+    Represents the result of a question generation process for a document.
+    Includes a list of questions, average score, and combined score.
     """
     document_id: Optional[str] = None
-    document_text: str
-    # entities: List[str]
-    # topics: List[str]
+    questions: List[GeneratedQuestionsWithScores]
+    combined_keywords: Optional[List[str]] = None
 
+##############################################################
+# This is a legacy class not deleted to preserve an old code #
+###### DON'T DELELTE -------- DON'T USE IN NEW CODES #########
+##############################################################
 class RAGQuestionGenerator(BaseModel):
     """
     Represents a question generated from a document segment.

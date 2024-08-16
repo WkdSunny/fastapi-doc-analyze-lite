@@ -3,11 +3,19 @@
 This module defines the RAG question generation routes for the FastAPI application.
 """
 
+from typing import Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
 from app.services.rag.questions.hybrid_questions import IntegratedQuestionGeneration
-from app.services.db.insert import insert_questions
-from app.models.rag_model import RAGQuestionRequest
+# from app.services.db.insert import insert_questions
 from app.config import logger
+
+class RAGQuestionRequest(BaseModel):
+    """
+    Represents a request to generate questions from a document segment.
+    """
+    document_id: Optional[str] = None
+    document_text: str
 
 router = APIRouter(
     prefix="/questions",

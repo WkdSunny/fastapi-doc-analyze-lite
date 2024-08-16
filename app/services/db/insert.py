@@ -3,9 +3,9 @@
 This module defines the database insertion functions for the FastAPI application.
 """
 
-from typing import List, Optional
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
-from app.models.rag_model import Segment, Entity, Topic, Classification, RAGQuestionGenerator
+from app.models.rag_model import Segment, Entity, Topic, Classification, GeneratedQuestionsWithScores, QuestionGenerationResult
 from app.config import settings, logger
 
 async def insert_documents(file_name: str, result: str) -> str:
@@ -179,7 +179,7 @@ async def insert_tf_idf_keywords(document_id: Optional[str], keywords: List[str]
         logger.error(f"Failed to insert TF-IDF keywords for document ID: {document_id}: {e}")
         raise
 
-async def insert_questions(document_id: str, questions: List[RAGQuestionGenerator]):
+async def insert_questions(document_id: str, questions: List[Dict[str, Any]], combined_keywords: List[str]):
     """
     Insert the generated questions into the Questions collection in the database.
 
@@ -191,16 +191,14 @@ async def insert_questions(document_id: str, questions: List[RAGQuestionGenerato
         Exception: If there's an error during the insertion process.
     """
     try:
-        formatted_questions = [
-            {
-                "document_id": document_id,
-                "serial": q["serial"],
-                "question": q["question"],
-                "score": float(q["score"]),
-            } 
-            for q in questions
-        ]
-        settings.mongo_client["Questions"].insert_many(formatted_questions)
+        # Ensure questions_with_scores is of type GeneratedQuestionsWithScores
+        formatted_questions = {
+            "document_id": document_id,
+            "questions": questions,
+            "combined_keywords": combined_keywords
+        }
+        
+        settings.mongo_client["Questions"].insert_one(formatted_questions)
 
         logger.info("Successfully inserted questions into the database.")
 

@@ -45,34 +45,28 @@ class IntegratedQuestionGeneration:
             if not entities:
                 raise ValueError("No entities found in the document.")
             await insert_entities(document_id, entities)
-            print(f"Entities: {entities}")
 
             # Step 2: Extract Topics
             topics = self.topic_modeling_pipeline.run([document_text])
             if not topics:
                 raise ValueError("No topics found in the document.")
             await insert_topics(document_id, topics)
-            print(f"Topics: {topics}")
 
             # Step 3: Extract TF-IDF Keywords
             tfidf_keywords = await self.tfidf_extractor.extract_keywords(document_text)
             if not tfidf_keywords:
                 raise ValueError("No TF-IDF keywords found in the document.")
             await insert_tf_idf_keywords(document_id, tfidf_keywords)
-            print(f"TF-IDF Keywords: {tfidf_keywords}")
 
             # Step 4: Combine Entities, Topics, and TF-IDF Keywords
             combined_keywords = list(set([entity.word for entity in entities] +
                                         [word for topic in topics for word in topic.words] +
                                         tfidf_keywords))
-            print(f"Combined Keywords: {combined_keywords}")
 
             # Step 5: Generate Questions using GPT-4 (Await the asynchronous call)
             questions = await self.question_generator.generate_questions(combined_keywords)
             if not questions:
                 raise ValueError("No questions generated.")
-            # await insert_questions(document_id, questions)
-            print(f"Generated Questions: {questions}")
 
             # Step 6: Evaluate Questions to assign confidence scores
             questions_with_scores = []
@@ -81,7 +75,7 @@ class IntegratedQuestionGeneration:
                 questions_with_scores.append(added_confidence_score)
 
             # Insert the questions into the database
-            await insert_questions(document_id, questions_with_scores)
+            await insert_questions(document_id, questions_with_scores, combined_keywords)
             return questions_with_scores
         except Exception as e:
             raise RuntimeError(f"Error generating questions: {e}")
