@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from app.models.rag_model import Segment, Entity, Topic, Classification, RAGQuestionGenerator
 from app.config import settings, logger
 
-async def insert_documents(file_name: str, result_text: str) -> str:
+async def insert_documents(file_name: str, result: str) -> str:
     """
     Insert the document data and its segments into the MongoDB database.
 
@@ -26,7 +26,8 @@ async def insert_documents(file_name: str, result_text: str) -> str:
         document_data = {
             "file_name": file_name,
             "uploaded_at": datetime.now(timezone.utc).isoformat(),
-            "text": result_text,
+            "text": result["text"],
+            "bounding_boxes": result["bounding_boxes"],
             "status":"processed"
         }
         document_id = settings.mongo_client["Documents"].insert_one(document_data).inserted_id

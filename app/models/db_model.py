@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from bson import ObjectId
 from typing import Optional, List
+from app.models.pdf_model import coordinates, BoundingBox
 
 class PyObjectId(ObjectId):
     @classmethod
@@ -20,12 +21,11 @@ class MongoBaseModel(BaseModel):
         json_encoders = {
             ObjectId: str,
         }
-
 class Document(MongoBaseModel):
-    document_id: str
     file_name: str
     uploaded_at: str
     text: str
+    bounding_boxes: Optional[List[BoundingBox]] = None
     status: str
 
 class Segment(MongoBaseModel):

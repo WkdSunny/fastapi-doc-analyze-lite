@@ -106,7 +106,7 @@ async def handle_file_result(file_name: str, task, content_type: str):
         result = await wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT)
 
         # Insert the processed document into the database
-        document_id = await insert_documents(file_name, result["text"])
+        document_id = await insert_documents(file_name, result)
 
         # Handle segmentation and classification in parallel
         segmentation_task = handle_segmentation(document_id, result, content_type)
