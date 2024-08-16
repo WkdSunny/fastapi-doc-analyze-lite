@@ -53,29 +53,29 @@ def create_linked_response(data: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: The nested structure.
     """
-    # Example of a simple linked structure
     linked_data = {}
     
     # Assume documents are always present if linked is True
     if "document" in data and data["document"]:
-        linked_data["document"] = data["document"][0]  # Assume one document per ID
+        # Convert the document model to a dictionary before nesting
+        linked_data["document"] = data["document"][0].dict()  # Assume one document per ID
 
         if "segment" in data and data["segment"]:
-            linked_data["document"]["segments"] = data["segment"]
+            linked_data["document"]["segments"] = [segment.dict() for segment in data["segment"]]
 
         if "entity" in data and data["entity"]:
-            linked_data["document"]["entities"] = data["entity"]
+            linked_data["document"]["entities"] = [entity.dict() for entity in data["entity"]]
 
         if "classification" in data and data["classification"]:
-            linked_data["document"]["classification"] = data["classification"]
+            linked_data["document"]["classification"] = [classification.dict() for classification in data["classification"]]
 
         if "topics" in data and data["topics"]:
-            linked_data["document"]["topics"] = data["topics"]
+            linked_data["document"]["topics"] = [topic.dict() for topic in data["topics"]]
 
         if "tfidf" in data and data["tfidf"]:
-            linked_data["document"]["tfidf"] = data["tfidf"]
+            linked_data["document"]["tfidf"] = [tfidf.dict() for tfidf in data["tfidf"]]
 
         if "questions" in data and data["questions"]:
-            linked_data["document"]["questions"] = data["questions"]
+            linked_data["document"]["questions"] = [question.dict() for question in data["questions"]]
 
     return linked_data
