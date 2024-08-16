@@ -155,7 +155,18 @@ def setup_logging():
 def init_db():
     """Initialize the database and collections."""
     try:
-        required_collections = ["Documents", "Segments", "Entities", "DocumentClassification", "Topics", "TFIDFKeywords", "Questions", "Answers", "Labels"]
+        required_collections = [
+            "Tasks", 
+            "Documents", 
+            "Segments", 
+            "Entities", 
+            "DocumentClassification", 
+            "Topics", 
+            "TFIDFKeywords", 
+            "Questions", 
+            "Answers", 
+            "Labels"
+        ]
         database = Settings.database
 
         # Check if collections exist, if not, create them

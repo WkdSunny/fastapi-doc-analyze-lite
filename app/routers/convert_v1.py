@@ -3,16 +3,10 @@
 This module defines the conversion routes for the FastAPI application.
 """
 
-import torch
 import asyncio
-import aiofiles
-import filetype
 from typing import List, Dict, Any
-from datetime import datetime, timezone
 from transformers import pipeline
-from transformers import BertTokenizer, BertForTokenClassification, BertForSequenceClassification
 from fastapi import APIRouter, File, UploadFile, HTTPException
-from concurrent.futures import ThreadPoolExecutor
 from app.config import settings, logger
 from app.tasks.pdf_tasks import process_pdf
 from app.tasks.excel_tasks import process_excel
@@ -20,6 +14,7 @@ from app.tasks.word_tasks import process_word
 from app.tasks.img_tasks import process_img
 from app.tasks.celery_tasks import wait_for_celery_task
 from app.services.file_processing import save_temp_file, get_file_type
+from app.services.db.insert import insert_documents, insert_task
 
 router = APIRouter(
     prefix="/convert_v1",
@@ -31,7 +26,6 @@ database = settings.database
 @router.post("/", response_model=Dict[str, Any])
 async def convert_files(files: List[UploadFile] = File(...)):
     tasks = []
-    responses = []
 
     for file in files:
         try:
@@ -60,30 +54,66 @@ async def convert_files(files: List[UploadFile] = File(...)):
                 logger.error(f"Unsupported file type: {file.filename}")
                 continue
 
-            tasks.append(wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT))
+            # Wait for the Celery task to complete and handle the result
+            tasks.append(asyncio.create_task(handle_file_result(file.filename, task)))
+            # tasks.append(wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT))
         except Exception as e:
             # failed_files.append(file.filename)
             logger.error(f"Failed to process file {file.filename}: {e}")
             continue
 
-        # Run all tasks in parallel and gather the results
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Collect responses and filter out errors
-        for result in results:
-            if isinstance(result, Exception):
-                logger.error(f"Task failed with error: {result}")
-            else:
-                responses.append(result)
-                
-    if not responses:
+    # Run all tasks concurrently and gather results
+    document_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Filter out successful results
+    document_results = [result for result in document_results if not isinstance(result, Exception)]
+
+    # Extract document IDs from the results and store them
+    task_document_ids = [doc["document_id"] for doc in document_results]
+
+    # Insert the Task document with all document IDs
+    task_id = await insert_task(task_document_ids)
+
+    if not document_results:
         raise HTTPException(status_code=500, detail="No files processed successfully")
 
     return {
         "status": 200,
         "success": True,
-        "result": responses
+        "result": {
+            "task_id": task_id,
+            "document_data": document_results
+        }
     }
+
+async def handle_file_result(file_name: str, task):
+    """
+    Handle the result of a file processing task by waiting for the task to complete
+    and inserting the document into the database.
+
+    Args:
+        file_name (str): The name of the file being processed.
+        task (Task): The Celery task processing the file.
+
+    Returns:
+        Dict[str, Any]: The response containing the document ID and other details.
+    """
+    try:
+        # Wait for the Celery task to complete
+        result = await wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT)
+
+        # Insert the processed document into the database
+        document_id = await insert_documents(file_name, result["text"])
+
+        return {
+            "document_id": document_id,
+            "file_name": file_name,
+            "status": "processed",
+            "result": result
+        }
+    except Exception as e:
+        logger.error(f"Error processing file {file_name}: {e}")
+        raise
 
 if __name__ == "__main__":
     from fastapi.testclient import TestClient

@@ -38,6 +38,29 @@ async def insert_documents(file_name: str, result_text: str) -> str:
         logger.error(f"Failed to insert document: {e}")
         raise
 
+async def insert_task(document_ids: List[str]):
+    """
+    Insert a Task document containing all the document IDs processed in this task.
+
+    Args:
+        document_ids (List[str]): A list of document IDs associated with this task.
+
+    Raises:
+        Exception: If there's an error during the insertion process.
+    """
+    try:
+        task_data = {
+            "document_ids": document_ids,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        task_id = database["Tasks"].insert_one(task_data).inserted_id
+        logger.info(f"Successfully inserted task with ID: {task_id}")
+        return str(task_id)
+
+    except Exception as e:
+        logger.error(f"Failed to insert task: {e}")
+        raise
+
 async def insert_segments(document_id: str, segments: List[Segment]):
     """
     Insert the document data and its segments into the MongoDB database.

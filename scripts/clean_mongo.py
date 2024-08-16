@@ -19,7 +19,18 @@ if __name__ == "__main__":
     database_name = "doc_analyse"  # Replace with your database name
 
     # Specify the collections you want to clear
-    collections_to_clear = ["Documents", "Segments", "Entities", "DocumentClassification", "Topics", "TFIDFKeywords", "Questions", "Answers", "Labels"]  # Add or remove collection names as needed
+    collections_to_clear = [
+        "Tasks", 
+        "Documents", 
+        "Segments", 
+        "Entities", 
+        "DocumentClassification", 
+        "Topics", 
+        "TFIDFKeywords", 
+        "Questions", 
+        "Answers", 
+        "Labels"
+    ]  # Add or remove collection names as needed
 
     # Clear the specified collections
     clear_collections(database_name, collections_to_clear)
