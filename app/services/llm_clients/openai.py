@@ -28,7 +28,7 @@ async def send_openai_request(messages: dict) -> dict:
         try:
             # Log the payload being sent
             payload = {
-                "model": "gpt-4-turbo",
+                "model": "gpt-3.5-turbo",
                 "messages": messages,
                 "max_tokens": 1000,
                 "temperature": 0.0

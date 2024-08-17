@@ -16,6 +16,7 @@ from app.services.file_processing import save_temp_file, get_file_type
 from app.services.db.insert import insert_documents, insert_task, insert_segments, insert_classification
 from app.services.document_segmentation import DocumentSegmenter
 from app.services.document_classification import DocumentClassifier
+from app.services.rag.questions.hybrid_questions import IntegratedQuestionGeneration
 from app.models.rag_model import Segment, Classification
 
 router = APIRouter(
@@ -90,8 +91,8 @@ async def convert_files(files: List[UploadFile] = File(...)):
 
 async def handle_file_result(file_name: str, task, content_type: str):
     """
-    Handle the result of a file processing task by waiting for the task to complete
-    and inserting the document into the database.
+    Handle the result of a file processing task by waiting for the task to complete,
+    inserting the document into the database, segmenting, classifying, and generating questions.
 
     Args:
         file_name (str): The name of the file being processed.
@@ -99,7 +100,7 @@ async def handle_file_result(file_name: str, task, content_type: str):
         content_type (str): The content type of the file being processed.
 
     Returns:
-        Dict[str, Any]: The response containing the document ID and other details.
+        Dict[str, Any]: The response containing the document ID, file name, and generated questions.
     """
     try:
         # Wait for the Celery task to complete
@@ -115,12 +116,56 @@ async def handle_file_result(file_name: str, task, content_type: str):
         # Run the segmentation and classification tasks concurrently
         await asyncio.gather(segmentation_task, classification_task)
 
-        final_result = {"document_id": document_id, "file_name": file_name}
-        final_result.update(result)
+        # Step 7: Generate questions using the IntegratedQuestionGeneration service
+        question_generator = IntegratedQuestionGeneration()
+        questions_with_scores = await question_generator.generate_questions(result["text"], document_id)
+
+        # Return the final result with document ID, file name, and generated questions
+        final_result = {
+            "document_id": document_id,
+            "file_name": file_name,
+            "questions": questions_with_scores
+        }
         return final_result
+
     except Exception as e:
         logger.error(f"Error processing file {file_name}: {e}")
         raise
+
+
+# async def handle_file_result(file_name: str, task, content_type: str):
+#     """
+#     Handle the result of a file processing task by waiting for the task to complete
+#     and inserting the document into the database.
+
+#     Args:
+#         file_name (str): The name of the file being processed.
+#         task (Task): The Celery task processing the file.
+#         content_type (str): The content type of the file being processed.
+
+#     Returns:
+#         Dict[str, Any]: The response containing the document ID and other details.
+#     """
+#     try:
+#         # Wait for the Celery task to complete
+#         result = await wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT)
+
+#         # Insert the processed document into the database
+#         document_id = await insert_documents(file_name, result)
+
+#         # Handle segmentation and classification in parallel
+#         segmentation_task = handle_segmentation(document_id, result, content_type)
+#         classification_task = handle_classification(document_id, result)
+
+#         # Run the segmentation and classification tasks concurrently
+#         await asyncio.gather(segmentation_task, classification_task)
+
+#         final_result = {"document_id": document_id, "file_name": file_name}
+#         final_result.update(result)
+#         return final_result
+#     except Exception as e:
+#         logger.error(f"Error processing file {file_name}: {e}")
+#         raise
 
 async def handle_segmentation(document_id: str, result: Dict[str, Any], content_type: str):
     """
