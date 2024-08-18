@@ -226,7 +226,7 @@ def aggregate_entities_by_category(parsed_data: List[Dict[str, str]]) -> List[Di
         aggregated_data[entity].append(text)
 
     # Convert to desired output format
-    return [{"Category": category, "Entities": entities} for category, entities in aggregated_data.items()]
+    return [{"entity": entity, "text": text} for entity, text in aggregated_data.items()]
 
 if __name__ == "__main__":
     from fastapi.testclient import TestClient
