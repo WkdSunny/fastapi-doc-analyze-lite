@@ -2,12 +2,10 @@
 """
 This module defines the document segmentation service for the FastAPI application.
 """
-import gc
+
 import spacy
-import torch
 from typing import List, Dict, Any
-from app.models.rag_model import Segment, BoundingBox
-from app.models.pdf_model import PDFTextResponse
+from app.models.rag_model import Segment
 from app.config import logger
 
 class DocumentSegmenter:
@@ -77,13 +75,6 @@ class DocumentSegmenter:
             segments = [
                 Segment(
                     serial=index,
-                    page=bbox["page"],
-                    bbox=BoundingBox(
-                        left=float(bbox["bbox"]["left"]),
-                        top=float(bbox["bbox"]["top"]),
-                        width=float(bbox["bbox"]["width"]),
-                        height=float(bbox["bbox"]["height"]),
-                    ),
                     text=bbox["text"],
                     confidence=float(bbox["confidence"])  # Convert to regular float
                 )

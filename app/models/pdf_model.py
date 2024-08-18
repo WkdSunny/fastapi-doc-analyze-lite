@@ -4,13 +4,13 @@ This module defines the Pydantic models for the PDF text extraction response.
 """
 
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 class coordinates(BaseModel):
-    left: float
-    top: float
-    width: float
-    height: float
+    left: Optional[float] = 0.0
+    top: Optional[float] = 0.0
+    width: Optional[float] = 0.0
+    height: Optional[float] = 0.0
 
     def to_dict(self):
         return {

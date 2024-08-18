@@ -4,7 +4,9 @@ This module defines the conversion routes for the FastAPI application.
 """
 
 import asyncio
-from typing import List, Dict, Any
+import datetime
+from typing import List, Dict, Any, Optional
+from collections import defaultdict
 from fastapi import APIRouter, File, UploadFile, HTTPException
 from app.config import settings, logger
 from app.tasks.pdf_tasks import process_pdf
@@ -13,11 +15,13 @@ from app.tasks.word_tasks import process_word
 from app.tasks.img_tasks import process_img
 from app.tasks.celery_tasks import wait_for_celery_task
 from app.services.file_processing import save_temp_file, get_file_type
-from app.services.db.insert import insert_documents, insert_task, insert_segments, insert_classification
+from app.services.db.insert import insert_documents, insert_task, insert_segments, insert_entities, insert_classification, insert_token_consumption
 from app.services.document_segmentation import DocumentSegmenter
+from app.services.propmt_engine.entity_recognition import get_entities
 from app.services.document_classification import DocumentClassifier
 from app.services.rag.questions.hybrid_questions import IntegratedQuestionGeneration
 from app.models.rag_model import Segment, Classification
+from app.utils.csv_utils import parse_csv_content
 
 router = APIRouter(
     prefix="/convert_v1",
@@ -110,62 +114,38 @@ async def handle_file_result(file_name: str, task, content_type: str):
         document_id = await insert_documents(file_name, result)
 
         # Handle segmentation and classification in parallel
-        segmentation_task = handle_segmentation(document_id, result, content_type)
-        classification_task = handle_classification(document_id, result)
+        segments = await handle_segmentation(document_id, result, content_type)
+        segment_texts = [segment.text.strip() for segment in segments if segment.text.strip()]
 
-        # Run the segmentation and classification tasks concurrently
-        await asyncio.gather(segmentation_task, classification_task)
+        if not segment_texts:
+            logger.error("No valid segments to process after filtering out empty or stop word-only segments.")
+            raise ValueError("The document contains no valid text to process.")
+        
+        entities_result = await handle_entity(document_id, segment_texts)
+        entities = aggregate_entities_by_category(entities_result["entities"])
+        logger.info(f"Entities extracted from segments: {entities}")
+        # classification_task = handle_classification(document_id, result)
 
-        # Step 7: Generate questions using the IntegratedQuestionGeneration service
-        question_generator = IntegratedQuestionGeneration()
-        questions_with_scores = await question_generator.generate_questions(result["text"], document_id)
+        # # Run the segmentation and classification tasks concurrently
+        # await asyncio.gather(segmentation_task, classification_task)
+        # await asyncio.gather(segmentation_task, er_task)
+
+        # # Step 7: Generate questions using the IntegratedQuestionGeneration service
+        # question_generator = IntegratedQuestionGeneration()
+        # questions_with_scores = await question_generator.generate_questions(result["text"], document_id)
 
         # Return the final result with document ID, file name, and generated questions
         final_result = {
             "document_id": document_id,
             "file_name": file_name,
-            "questions": questions_with_scores
+            "result": entities,
+            "token_usage": entities_result["token_usage"]
         }
         return final_result
 
     except Exception as e:
         logger.error(f"Error processing file {file_name}: {e}")
         raise
-
-
-# async def handle_file_result(file_name: str, task, content_type: str):
-#     """
-#     Handle the result of a file processing task by waiting for the task to complete
-#     and inserting the document into the database.
-
-#     Args:
-#         file_name (str): The name of the file being processed.
-#         task (Task): The Celery task processing the file.
-#         content_type (str): The content type of the file being processed.
-
-#     Returns:
-#         Dict[str, Any]: The response containing the document ID and other details.
-#     """
-#     try:
-#         # Wait for the Celery task to complete
-#         result = await wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT)
-
-#         # Insert the processed document into the database
-#         document_id = await insert_documents(file_name, result)
-
-#         # Handle segmentation and classification in parallel
-#         segmentation_task = handle_segmentation(document_id, result, content_type)
-#         classification_task = handle_classification(document_id, result)
-
-#         # Run the segmentation and classification tasks concurrently
-#         await asyncio.gather(segmentation_task, classification_task)
-
-#         final_result = {"document_id": document_id, "file_name": file_name}
-#         final_result.update(result)
-#         return final_result
-#     except Exception as e:
-#         logger.error(f"Error processing file {file_name}: {e}")
-#         raise
 
 async def handle_segmentation(document_id: str, result: Dict[str, Any], content_type: str):
     """
@@ -180,6 +160,7 @@ async def handle_segmentation(document_id: str, result: Dict[str, Any], content_
         segments: List[Segment] = await document_segmenter.segment_document(result, content_type)
         await insert_segments(document_id, segments)
         logger.info(f"Successfully segmented and inserted segments for document ID: {document_id}")
+        return segments
     except Exception as e:
         logger.error(f"Failed to segment or insert segments for document ID: {document_id}: {e}")
 
@@ -198,6 +179,54 @@ async def handle_classification(document_id: str, result: Dict[str, Any]):
     except Exception as e:
         logger.error(f"Failed to classify or insert classification for document ID: {document_id}: {e}")
 
+async def handle_entity(document_id: str, segments: List[str]) -> Dict[str, Optional[str]]:
+    """
+    Perform entity recognition on grouped segments.
+
+    Args:
+        segments (List[str]): A list of text segments.
+
+    Returns:
+        Dict[str, Optional[str]]: A dictionary where the key is the segment group and the value is the list of entities.
+    """
+    # Combine all segments into one text block
+    combined_text = "|".join(segments)
+    logger.info(f"Documnent ID: {document_id}, Combined Text: {combined_text}")
+    # Extract entities from the combined text
+    raw_entities = await get_entities(combined_text)
+    entities = await parse_csv_content(raw_entities["entities"])
+    await insert_entities(document_id, entities)
+
+    # Remove '_id' field from entities after insertion
+    for entity in entities:
+        entity.pop('_id', None)
+
+    await insert_token_consumption(document_id, "OpenAI", "Entity Recognition", raw_entities["usage"])
+
+    return {
+        "entities": entities,
+        "token_usage": raw_entities["usage"]
+    }
+
+def aggregate_entities_by_category(parsed_data: List[Dict[str, str]]) -> List[Dict[str, List[str]]]:
+    """
+    Aggregate entities by category.
+
+    Args:
+        parsed_data (List[Dict[str, str]]): The parsed CSV data with 'category' and 'entity' keys.
+
+    Returns:
+        List[Dict[str, List[str]]]: A list of dictionaries with 'Category' as a key and 'Entities' as a list of values.
+    """
+    aggregated_data = defaultdict(list)
+
+    for item in parsed_data:
+        entity = item['entity']
+        text = item['text']
+        aggregated_data[entity].append(text)
+
+    # Convert to desired output format
+    return [{"Category": category, "Entities": entities} for category, entities in aggregated_data.items()]
 
 if __name__ == "__main__":
     from fastapi.testclient import TestClient
@@ -214,5 +243,5 @@ if __name__ == "__main__":
         UploadFile(filename="sample.jpg", content_type="image/jpeg"),
     ]
     
-    response = client.post("/convert_v1/", files=files)
+    response = client.post("/convert_v1", files=files)
     print(response.json())

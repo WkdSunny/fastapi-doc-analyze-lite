@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from bson import ObjectId
 from typing import Optional, List
-from app.models.pdf_model import coordinates, BoundingBox
+from app.models.pdf_model import BoundingBox
 
 class PyObjectId(ObjectId):
     @classmethod
@@ -31,19 +31,13 @@ class Document(MongoBaseModel):
 class Segment(MongoBaseModel):
     document_id: str
     serial: int
-    page: Optional[int] = None
-    bbox: Optional[dict] = None  # Assuming bounding boxes are dictionaries
     text: str
     confidence: float
 
 class Entity(MongoBaseModel):
     document_id: str
-    serial: int
-    word: str
     entity: str
-    score: float
-    start: Optional[int] = None
-    end: Optional[int] = None
+    text: str
 
 class Classification(MongoBaseModel):
     document_id: str
@@ -68,3 +62,9 @@ class Question(MongoBaseModel):
     topics: List[str]
     tfidf_keywords: List[str]
     
+class TokenUsage(MongoBaseModel):
+    document_id: str
+    llm: str
+    consumer: str
+    token: str
+    count: int

@@ -3,6 +3,47 @@
 This module contains utility functions for the LLM service.
 """
 
+import re
+from typing import Optional
+from app.config import logger
+
+def clean_prompt(prompt: str) -> str:
+    # Remove leading and trailing whitespace from each line
+    cleaned_prompt = "\n".join([line.strip() for line in prompt.splitlines()])
+    
+    # Replace multiple spaces with a single space
+    cleaned_prompt = re.sub(r' +', ' ', cleaned_prompt)
+
+    return cleaned_prompt
+
+def CountTokens(usage_data: Optional[dict]) -> Optional[dict]:
+    """
+    Count and log token usage based on the provided usage data.
+
+    Args:
+        usage_data (Optional[dict]): A dictionary containing token usage information.
+
+    Returns:
+        Optional[dict]: A dictionary with token counts or None if usage data is not provided.
+    """
+    if usage_data:
+        prompt_tokens = usage_data.get('prompt_tokens', 0)
+        completion_tokens = usage_data.get('completion_tokens', 0)
+        total_tokens = usage_data.get('total_tokens', 0)
+
+        logger.info(f"Token Usage - Prompt: {prompt_tokens}, Completion: {completion_tokens}, Total: {total_tokens}")
+
+        return {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens
+        }
+    else:
+        logger.warning("Token usage information not found in the response.")
+        return None
+
+
+
 def iac_user_prompt ():
     prompt =  """
         Here is the details of the task:

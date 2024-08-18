@@ -1,3 +1,8 @@
+# /app/main.py
+"""
+This module defines the main FastAPI application.
+"""
+
 from fastapi import FastAPI, Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from starlette.middleware.authentication import AuthenticationMiddleware
@@ -36,5 +41,5 @@ async def universal_exception_handler(request, exc):
 # Initialize database on startup
 @app.on_event("startup")
 async def startup_event():
-    init_db()
+    await init_db()
     logger.info("Database initialized and collections checked")

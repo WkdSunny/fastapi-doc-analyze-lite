@@ -3,9 +3,12 @@
 This module defines the database insertion functions for the FastAPI application.
 """
 
-from typing import List, Dict, Any, Optional
+from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import PyMongoError
 from datetime import datetime, timezone
+from typing import List, Dict, Any, Optional
 from app.models.rag_model import Segment, Entity, Topic, Classification, GeneratedQuestionsWithScores, QuestionGenerationResult
+from app.utils.date_utils import convert_to_iso_date
 from app.config import settings, logger
 
 async def insert_documents(file_name: str, result: str) -> str:
@@ -30,7 +33,8 @@ async def insert_documents(file_name: str, result: str) -> str:
             "bounding_boxes": result["bounding_boxes"],
             "status":"processed"
         }
-        document_id = settings.mongo_client["Documents"].insert_one(document_data).inserted_id
+        result = await settings.mongo_client["Documents"].insert_one(document_data)
+        document_id = result.inserted_id
         logger.info(f"Successfully inserted document with ID: {document_id}")
         return str(document_id)
     except Exception as e:
@@ -52,10 +56,11 @@ async def insert_task(document_ids: List[str]):
             "document_ids": document_ids,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-        task_id = settings.mongo_client["Tasks"].insert_one(task_data).inserted_id
+        # Await the insert operation
+        result = await settings.mongo_client["Tasks"].insert_one(task_data)
+        task_id = result.inserted_id  # Access the inserted_id after awaiting the result
         logger.info(f"Successfully inserted task with ID: {task_id}")
         return str(task_id)
-
     except Exception as e:
         logger.error(f"Failed to insert task: {e}")
         raise
@@ -91,20 +96,19 @@ async def insert_entities(document_id: Optional[str], entities: List[Entity]):
 
     Args:
         document_id (str): The ID of the document to which the entities belong.
-        entities (List[in_Entity]): A list of Entity model instances to be inserted.
+        entities (List[Entity]): A list of Entity model instances to be inserted.
 
     Raises:
         Exception: If there's an error during the insertion process.
     """
     try:
         # Convert input Entity models to output Entity models and then to dictionaries
-        entity_dicts = [entity.dict() for entity in entities]
-        for entity in entity_dicts:
+        for entity in entities:
             entity["document_id"] = document_id
         
         # Insert the entities into the Entities collection
-        settings.mongo_client["Entities"].insert_many(entity_dicts)
-        logger.info(f"Successfully inserted {len(entity_dicts)} entities for document ID: {document_id}")
+        await settings.mongo_client["Entities"].insert_many(entities)
+        logger.info(f"Successfully inserted {len(entities)} entities for document ID: {document_id}")
     
     except Exception as e:
         logger.error(f"Failed to insert entities for document ID: {document_id}: {e}")
@@ -131,7 +135,7 @@ async def insert_classification(document_id: str, classification: Classification
         }
         
         # Insert the classification record into the DocumentClassification collection
-        settings.mongo_client["DocumentClassification"].insert_one(classification_record)
+        await settings.mongo_client["DocumentClassification"].insert_one(classification_record)
         logger.info(f"Successfully inserted classification for document ID: {document_id}")
     
     except Exception as e:
@@ -156,7 +160,7 @@ async def insert_topics(document_id: Optional[str], topics: List[Topic]):
             topic["document_id"] = document_id
         
         # Insert the topic records into the Topics collection
-        settings.mongo_client["Topics"].insert_many(topic_records)
+        await settings.mongo_client["Topics"].insert_many(topic_records)
         logger.info(f"Successfully inserted {len(topic_records)} topics for document ID: {document_id}")
 
     except Exception as e:
@@ -172,7 +176,7 @@ async def insert_tf_idf_keywords(document_id: Optional[str], keywords: List[str]
         keyword_records = [{"document_id": document_id, "keyword": keyword} for keyword in keywords]
         
         # Insert the keyword records into the TFIDFKeywords collection
-        settings.mongo_client["TFIDFKeywords"].insert_many(keyword_records)
+        await settings.mongo_client["TFIDFKeywords"].insert_many(keyword_records)
         logger.info(f"Successfully inserted {len(keyword_records)} TF-IDF keywords for document ID: {document_id}")
 
     except Exception as e:
@@ -198,7 +202,7 @@ async def insert_questions(document_id: str, questions: List[Dict[str, Any]], co
             "combined_keywords": combined_keywords
         }
         
-        settings.mongo_client["Questions"].insert_one(formatted_questions)
+        await settings.mongo_client["Questions"].insert_one(formatted_questions)
 
         logger.info("Successfully inserted questions into the database.")
 
@@ -207,3 +211,44 @@ async def insert_questions(document_id: str, questions: List[Dict[str, Any]], co
         logger.error(f"Failed to insert questions into the database: {e}")
         raise
 
+async def insert_token_consumption(document_id: str, llm_client: str, consumer: str, token_usage: Dict[str, int]):
+    """
+    Insert the token consumption data into the database.
+
+    Args:
+        document_id (str): The ID of the document.
+        token_usage (Dict[str, int]): A dictionary containing the token usage data.
+    """
+    try:
+        if not token_usage:
+            logger.warning(f"Token usage data is empty for document ID: {document_id}")
+            return
+        
+        # Prepare the token records with the document_id
+        token_records = [
+            {
+                "document_id": document_id, 
+                "llm_client": llm_client,
+                "consumer": consumer,
+                "token": token,
+                "count": count,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            } for token, count in token_usage.items()
+        ]
+        
+        # Check if MongoDB collection is available
+        # if not settings.mongo_client or "TokenUsage" not in settings.mongo_client.list_collection_names():
+        #     logger.error(f"MongoDB collection 'TokenUsage' not available for document ID: {document_id}")
+        #     return
+
+        # Insert the token records into the TokenUsage collection
+        await settings.mongo_client["TokenUsage"].insert_many(token_records)
+        logger.info(f"Successfully inserted token usage data for document ID: {document_id}")
+
+    except PyMongoError as e:
+        logger.error(f"MongoDB error occurred while inserting token usage data for document ID: {document_id}: {e}")
+        raise
+
+    except Exception as e:
+        logger.error(f"Unexpected error occurred while inserting token usage data for document ID: {document_id}: {e}")
+        raise

@@ -16,24 +16,11 @@ class Document(BaseModel):
     text: str
     status: str
 
-class BoundingBox(BaseModel):
-    """
-    Represents the bounding box coordinates for a segment of a document.
-    Used for PDFs or image-based documents.
-    """
-    left: Optional[float] = 0.0
-    top: Optional[float] = 0.0
-    width: Optional[float] = 0.0
-    height: Optional[float] = 0.0
-
 class Segment(BaseModel):
     """
-    Represents a segment of a document, including optional page and bounding box information.
-    Used for both PDF/image documents (with bounding boxes) and text/Excel documents.
+    Represents a segment of a document.
     """
     serial: int
-    page: Optional[int] = None
-    bbox: Optional[BoundingBox] = None
     text: str
     confidence: float
 
@@ -41,12 +28,8 @@ class Entity(BaseModel):
     """
     Represents an entity extracted from a document.
     """
-    serial: int
-    word: str
     entity: str
-    score: float
-    start: Optional[int] = 0
-    end: Optional[int] = 0
+    text: str
 
 class Classification(BaseModel):
     """

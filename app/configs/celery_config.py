@@ -6,7 +6,7 @@ from celery import Celery
 from app.config import logger, settings
 
 # Initialize the Celery application
-app = Celery('doc_analyse_tasks',
+app = Celery('doc_analyse_lite_tasks',
              broker= settings.REDIS_URL,
              backend= settings.REDIS_URL,
              include=[

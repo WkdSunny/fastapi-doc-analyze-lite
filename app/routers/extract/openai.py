@@ -3,13 +3,12 @@
 This module defines the extraction routes for the FastAPI application using OpenAI.
 """
 
-import json
 from fastapi import APIRouter, HTTPException
 from app.config import logger
 from app.utils.model_utils import csv_to_json
-from app.services.llm_clients.openai import extract_with_openai
-from app.models.pdf_model import BoundingBox, PDFTextResponse
+from app.services.llm_clients.openai import send_openai_request
 from app.models.llm_model import ExtractionResponse, ExtractionItem, ExtractionRequest
+from app.utils.llm_utils import default_system_prompt, default_user_prompt
 from app.utils.bbox_mapping import map_bbox_to_data
 
 router = APIRouter(
@@ -51,6 +50,48 @@ async def extract_data(request: ExtractionRequest):
     except Exception as e:
         logger.error(f'Unexpected error occurred: {str(e)}')
         raise HTTPException(status_code=500, detail=str(e))
+    
+def prepare_prompt(text: str, prompt: str) -> str:
+    """
+    Prepare the final prompt to be sent to the OpenAI API.
+    """
+    if not prompt:
+        prompt = default_user_prompt()
+
+    return f"{prompt}\n<Content>\n{text}\n</Content>"
+
+def prepare_messages(system_prompt, user_prompt: str) -> list:
+    """
+    Prepare the messages for the OpenAI API request.
+    """
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+async def extract_with_openai(text: str, prompt: str) -> dict:
+    """
+    Main function to get the response from OpenAI API.
+    """
+    if not text:
+        raise ValueError('Data is required')
+
+    final_prompt = prepare_prompt(text, prompt)
+    logger.debug(f'Final prompt is: {final_prompt}')
+
+    messages = prepare_messages(default_system_prompt(), final_prompt)
+
+    try:
+        result = await send_openai_request(messages)
+        if not result['success']:
+            raise ValueError(result['message'])
+
+        raw_response = result['response']['choices'][0]['message']['content']
+        return raw_response.strip()
+
+    except Exception as e:
+        logger.error(f"An error occurred: {e}")
+        raise ValueError(str(e))
 
 # Example Usage:
 if __name__ == "__main__":

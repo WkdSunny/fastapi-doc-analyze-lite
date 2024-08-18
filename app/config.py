@@ -1,10 +1,15 @@
+# /app/config.py
+"""
+This module defines the configuration settings for the application.
+"""
+
 import os
 import logging
-from pymongo import MongoClient
 from dotenv import load_dotenv
 from urllib.parse import urlparse, urlunparse
 from pymongo.errors import PyMongoError
 from logging.handlers import RotatingFileHandler
+from motor.motor_asyncio import AsyncIOMotorClient
 
 # Load environment variables
 load_dotenv()
@@ -15,7 +20,7 @@ class MongoClientSingleton:
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls, *args, **kwargs)
-            cls._instance.client = MongoClient(os.getenv("MONGO_URI"))
+            cls._instance.client = AsyncIOMotorClient(os.getenv("MONGO_URI"))
         return cls._instance
 
     def get_database(self, db_name):
@@ -89,7 +94,7 @@ def get_base_url(url: str) -> str:
     base_url = urlunparse((parsed_url.scheme, parsed_url.netloc, '', '', '', ''))
     return base_url
 
-def init_db():
+async def init_db():
     """Initialize the database and collections."""
     try:
         required_collections = [
@@ -102,15 +107,16 @@ def init_db():
             "TFIDFKeywords", 
             "Questions", 
             "Answers", 
-            "Labels"
+            "Labels",
+            "Tokens"
         ]
         database = settings.mongo_client
 
         # Check if collections exist, if not, create them
-        existing_collections = database.list_collection_names()
+        existing_collections = await database.list_collection_names()
         for collection in required_collections:
             if collection not in existing_collections:
-                database.create_collection(collection)
+                await database.create_collection(collection)
                 logger.info(f"Created collection: {collection}")
 
         logger.info("Database initialized successfully")
