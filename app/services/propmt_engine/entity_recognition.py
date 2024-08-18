@@ -85,19 +85,20 @@ async def get_entities(text: str) -> Optional[str]:
             Requirements:
             - Extract and categorize all entities from the given text.
             - The entities should be extracted and categorized accurately.
+            - For each extracted and categorized entity, provide a short description and determine the context in which it appears.
             - Return the data in csv format. Use pipe (|) as the delimiter.
 
             Example: (This is for guidance, This is not an exhaustive list)
-            Entity|Text
-            PER|John Doe
-            LOC|New York
-            ORG|Google
-            DATE|May 30, 2015
-            DATE|2015-12-17T20:09:35
-            DATE|08/18/1994
-            NUM|100001168
-            AMT|$100,000
-            EVENT|World War II
+            entity|text|description
+            PER|John Doe|This person is a banker
+            LOC|New York|This is the city where he lives
+            ORG|Google|This is one of the companies he worked for
+            DATE|May 30, 2015|This is the date of the event
+            DATE|2015-12-17T20:09:35|This is the date and time of the event
+            DATE|08/18/1994|This is the date of birth of the person
+            NUM|100001168|This is a number associated with the person
+            AMT|$100,000|This is the amount of money he earns
+            EVENT|World War II|This is the event where his grandfather died
 
             Instructions:
             - While the example above is a simple one, the text you will be given may contain more complex entities.
@@ -109,6 +110,7 @@ async def get_entities(text: str) -> Optional[str]:
             - Make sure that the context is not lost while extracting the entities.
             - Do not repeat text unnecessarily. Text should be unique.
             - Use short codes for the categories: PER (Person), LOC (Location), ORG (Organization), DATE, NUM (Number), AMT (Amount), etc.
+            - Descripttion should be short but presize and to the point.
             - Use the format above to return the entities.
         """
     )
@@ -143,7 +145,7 @@ async def get_entities(text: str) -> Optional[str]:
                         entities = choice['message']['content']
                         return {
                             "entities": entities.strip(), 
-                            "usage": usage
+                            "token_usage": usage
                         }
                     else:
                         logger.error(f"'message' or 'content' key not found in the response choice: {choice}")

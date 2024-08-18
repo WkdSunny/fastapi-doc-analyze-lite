@@ -122,8 +122,8 @@ async def handle_file_result(file_name: str, task, content_type: str):
             raise ValueError("The document contains no valid text to process.")
         
         entities_result = await handle_entity(document_id, segment_texts)
-        entities = aggregate_entities_by_category(entities_result["entities"])
-        logger.info(f"Entities extracted from segments: {entities}")
+        # entities = aggregate_entities_by_category(entities_result["entities"])
+        # logger.info(f"Entities extracted from segments: {entities}")
         # classification_task = handle_classification(document_id, result)
 
         # # Run the segmentation and classification tasks concurrently
@@ -138,7 +138,7 @@ async def handle_file_result(file_name: str, task, content_type: str):
         final_result = {
             "document_id": document_id,
             "file_name": file_name,
-            "result": entities,
+            "result": entities_result["entities"],
             "token_usage": entities_result["token_usage"]
         }
         return final_result
@@ -189,24 +189,29 @@ async def handle_entity(document_id: str, segments: List[str]) -> Dict[str, Opti
     Returns:
         Dict[str, Optional[str]]: A dictionary where the key is the segment group and the value is the list of entities.
     """
-    # Combine all segments into one text block
-    combined_text = "|".join(segments)
-    logger.info(f"Documnent ID: {document_id}, Combined Text: {combined_text}")
-    # Extract entities from the combined text
-    raw_entities = await get_entities(combined_text)
-    entities = await parse_csv_content(raw_entities["entities"])
-    await insert_entities(document_id, entities)
+    try:
+        # Combine all segments into one text block
+        combined_text = "|".join(segments)
+        logger.info(f"Documnent ID: {document_id}, Combined Text: {combined_text}")
+        # Extract entities from the combined text
+        raw_entities = await get_entities(combined_text)
+        entities = await parse_csv_content(raw_entities["entities"])
+        await insert_entities(document_id, entities)
 
-    # Remove '_id' field from entities after insertion
-    for entity in entities:
-        entity.pop('_id', None)
+        # Remove '_id' field from entities after insertion
+        for entity in entities:
+            entity.pop('_id', None)
 
-    await insert_token_consumption(document_id, "OpenAI", "Entity Recognition", raw_entities["usage"])
+        await insert_token_consumption(document_id, "OpenAI", "Entity Recognition", raw_entities["token_usage"])
 
-    return {
-        "entities": entities,
-        "token_usage": raw_entities["usage"]
-    }
+
+        return {
+            "entities": entities,
+            "token_usage": raw_entities["token_usage"]
+        }
+    except Exception as e:
+        logger.error(f"Failed to extract entities for document ID: {document_id}: {e}")
+        raise
 
 def aggregate_entities_by_category(parsed_data: List[Dict[str, str]]) -> List[Dict[str, List[str]]]:
     """
