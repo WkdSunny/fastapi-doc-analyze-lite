@@ -13,13 +13,25 @@ from app.tasks.word_tasks import process_word
 from app.tasks.img_tasks import process_img
 from app.tasks.celery_tasks import wait_for_celery_task
 from app.services.file_processing import save_temp_file, get_file_type
-from app.services.db.insert import insert_documents, insert_task, insert_segments, insert_classification, insert_entities, insert_token_consumption
+from app.services.db.insert import (
+    insert_documents, 
+    insert_task, 
+    insert_segments, 
+    insert_classification, 
+    insert_entities, 
+    insert_token_consumption, 
+    insert_topics, 
+    insert_tf_idf_keywords
+)
 # from app.services.document_segmentation import DocumentSegmenter
 from app.services.prompt_engine.document_segmentation import DocumentSegmenter
 from app.services.prompt_engine.document_classification import classify_documents
 from app.services.prompt_engine.entity_recognition import get_entities
+from app.services.topic_modeling.pipeline import TopicModelingPipeline
+from app.services.tfidf_extraction import TFIDFExtractor
+from app.services.prompt_engine.question_generator import generate_questions
 # from app.services.document_classification import DocumentClassifier
-from app.services.rag.questions.hybrid_questions import IntegratedQuestionGeneration
+# from app.services.rag.questions.hybrid_questions import IntegratedQuestionGeneration
 from app.models.rag_model import Segment, Classification, Entity
 from app.utils.csv_utils import parse_csv_content
 
@@ -29,6 +41,8 @@ router = APIRouter(
 )
 
 document_segmenter = DocumentSegmenter()
+topic_modeling_pipeline = TopicModelingPipeline(num_topics=5, passes=10)
+tfidf_extractor = TFIDFExtractor()
 # document_classifier = DocumentClassifier()
 
 @router.post("/", response_model=Dict[str, Any])
@@ -64,7 +78,7 @@ async def convert_files(files: List[UploadFile] = File(...)):
                 continue
 
             # Wait for the Celery task to complete and handle the result
-            file_task = asyncio.create_task(handle_file_result(file.filename, task, content_type))
+            file_task = asyncio.create_task(handle_file_result(file.filename, task))
             tasks.append(file_task)
         except Exception as e:
             logger.error(f"Failed to process file {file.filename}: {e}")
@@ -73,16 +87,26 @@ async def convert_files(files: List[UploadFile] = File(...)):
     # Run all tasks concurrently and gather results
     document_results = await asyncio.gather(*tasks, return_exceptions=True)
 
+    if not document_results:
+        raise HTTPException(status_code=500, detail="No files processed successfully")
+    
     # Filter out successful results
+    successful_results = []
     for result in document_results:
         if not isinstance(result, Exception):
             task_document_ids.append(result["document_id"])
+            successful_results.append(result)
 
     # Insert the Task document with all document IDs
     task_id = await insert_task(task_document_ids)
 
-    if not document_results:
-        raise HTTPException(status_code=500, detail="No files processed successfully")
+    prompt_generation = await combined_tasks(task_id, document_results)
+
+    result = {
+        "task_id": task_id,
+        "document_data": successful_results,
+        "other_tasks": prompt_generation
+    }
 
     return {
         "status": 200,
@@ -93,7 +117,7 @@ async def convert_files(files: List[UploadFile] = File(...)):
         }
     }
 
-async def handle_file_result(file_name: str, task, content_type: str):
+async def handle_file_result(file_name: str, task):
     """
     Handle the result of a file processing task by waiting for the task to complete,
     inserting the document into the database, segmenting, classifying, and generating questions.
@@ -113,17 +137,28 @@ async def handle_file_result(file_name: str, task, content_type: str):
         # Insert the processed document into the database
         document_id = await insert_documents(file_name, result)
 
-        # Handle segmentation and classification in parallel
-        segmentation_task = handle_segmentation(document_id, result, content_type)
-        # classification_task = handle_classification(document_id, result)
-        classification_task = handle_classification(document_id, result, content_type)
+        # # Handle segmentation and classification in parallel
+        # segmentation_task = handle_segmentation(document_id, result, content_type)
+        # # classification_task = handle_classification(document_id, result)
+        # classification_task = handle_classification(document_id, result, content_type)
+        # topic_modeling_task = topic_modeling(document_id, result["text"])
 
-        # Run the segmentation and classification tasks concurrently
-        # await asyncio.gather(segmentation_task, classification_task)
-        segments, classification = await asyncio.gather(segmentation_task, classification_task)
-        logger.info(f"Segments: {segments}")
-        logger.info(f"Classification: {classification}")
-        # entities_result = await handle_entity(document_id, segments)
+        # # Run the segmentation and classification tasks concurrently
+        # segments, classification, topics = await asyncio.gather(segmentation_task, classification_task, topic_modeling_task)
+        # logger.info(f"Segments: {segments}")
+        # logger.info(f"Classification: {classification}")
+        # logger.info(f"Topics: {topics}")
+
+        # entities_task = handle_entity(document_id, segments)
+        # tfidf_extraction_task = tfidf_extraction(document_id, segments)
+
+        # # Run the entity recognition and TF-IDF extraction tasks concurrently
+        # entities_result, tfidf_keywords = await asyncio.gather(entities_task, tfidf_extraction_task)
+        # logger.info(f"Entities: {entities_result}")
+        # logger.info(f"TF-IDF Keywords: {tfidf_keywords}")
+
+        # questions = await generate_questions(segments, classification, entities_result["entities"], topics, tfidf_keywords, content_type)
+        # logger.info(f"Generated Questions: {questions}")
 
         # Step 7: Generate questions using the IntegratedQuestionGeneration service
         # question_generator = IntegratedQuestionGeneration()
@@ -133,10 +168,14 @@ async def handle_file_result(file_name: str, task, content_type: str):
         final_result = {
             "document_id": document_id,
             "file_name": file_name,
-            "text": result,
-            "segments": segments,
-            # "entity_list": entities_result
-            "classification": classification
+            "text": result["text"],
+            "bounding_boxes": result["bounding_boxes"],
+            # "segments": segments,
+            # "classification": classification,
+            # "entity_list": entities_result,
+            # "topics": topics,
+            # "tfidf_keywords": tfidf_keywords,
+            # "questions": questions
         }
         return final_result
 
@@ -144,49 +183,88 @@ async def handle_file_result(file_name: str, task, content_type: str):
         logger.error(f"Error processing file {file_name}: {e}")
         raise
 
-async def handle_segmentation(document_id: str, result: Dict[str, Any], content_type: str):
+async def combined_tasks(task_id: str, result: List[Dict[str, Any]]):
+    try:
+        # Handle segmentation and classification in parallel
+        segmentation_task = handle_segmentation(task_id, result)
+        classification_task = handle_classification(task_id, result)
+        topic_modeling_task = topic_modeling(task_id, result)
+
+        # Run the segmentation and classification tasks concurrently
+        segments, classification, topics = await asyncio.gather(segmentation_task, classification_task, topic_modeling_task)
+        logger.info(f"Segments: {segments}")
+        logger.info(f"Classification: {classification}")
+        logger.info(f"Topics: {topics}")
+
+        entities_task = handle_entity(task_id, segments)
+        tfidf_extraction_task = tfidf_extraction(task_id, segments)
+
+        # # Run the entity recognition and TF-IDF extraction tasks concurrently
+        entities_result, tfidf_keywords = await asyncio.gather(entities_task, tfidf_extraction_task)
+        logger.info(f"Entities: {entities_result}")
+        logger.info(f"TF-IDF Keywords: {tfidf_keywords}")
+
+        questions = await generate_questions(segments, classification, entities_result["entities"], topics, tfidf_keywords)
+        logger.info(f"Generated Questions: {questions}")
+
+        return {
+            "segments": segments,
+            # "classification": classification,
+        }
+    
+    except Exception as e:
+        logger.error(f"Error processing file {task_id}: {e}")
+        raise
+
+async def handle_segmentation(task_id: str, result: Dict[str, Any]):
     """
     Handle segmentation of the document and insert the segments into the database.
     
     Args:
-        document_id (str): The ID of the document.
+        task_id (str): The ID of the document.
         result (Dict[str, Any]): The result from the document processing containing the text.
         content_type (str): The content type of the document.
     """
     try:
-        segments: List[Segment] = await document_segmenter.segment_document(result, content_type)
-        await insert_segments(document_id, segments)
-        logger.info(f"Successfully segmented and inserted segments for document ID: {document_id}")
+        segments: List[Segment] = await document_segmenter.segment_document(result)
+        # await insert_segments(task_id, segments)
+        logger.info(f"Successfully segmented and inserted segments for document ID: {task_id}")
         return segments
     except Exception as e:
-        logger.error(f"Failed to segment or insert segments for document ID: {document_id}: {e}")
+        logger.error(f"Failed to segment or insert segments for document ID: {task_id}: {e}")
 
-async def handle_classification(document_id: str, result: Dict[str, Any], content_type: str):
+async def handle_classification(task_id: str, result: Dict[str, Any]):
     try:
-        classification_result = await classify_documents(result["text"], content_type)
-        logger.debug(f"Classification result: {classification_result}")
-        classification = classification_result["classification"][0]
-        logger.debug(f"Classification: {classification}")
-        token_usage = classification_result["usage"]
-        logger.debug(f"Token usage: {token_usage}")
+        classification_result = await classify_documents(result)
+        # classification = classification_result["classification"][0]
+        # logger.debug(f"Classification: {classification}")
+        token_usage = classification_result["token_usage"]
 
-        foramtted_classification = Classification(
-            label=classification["classification"],
-            description=classification["description"]
-        )
-        await insert_classification(document_id, foramtted_classification)
-        await insert_token_consumption(document_id, "OpenAI", "Document Classification", token_usage)
-        return foramtted_classification
+        # formatted_classification = Classification(
+        #     label=classification["classification"],
+        #     description=classification["description"]
+        # )
+        
+        # Run the database insertion tasks concurrently
+        # await asyncio.gather(
+        #     insert_classification(task_id, formatted_classification),
+        #     insert_token_consumption(task_id, "OpenAI", "Document Classification", token_usage)
+        # )
+
+        await insert_token_consumption(task_id, "OpenAI", "Document Classification", token_usage)
+
+        # return formatted_classification
+        return classification_result
     except Exception as e:
-        logger.error(f"Failed to classify document ID: {document_id}: {e}")
+        logger.error(f"Failed to classify document ID: {task_id}: {e}")
         raise
 
-async def handle_entity(document_id: str, segments: List[Segment]) -> Dict[str, Optional[str]]:
+async def handle_entity(task_id: str, segments: List[Segment]) -> Dict[str, Optional[str]]:
     """
     Perform entity recognition on all segments at once while preserving relationships.
 
     Args:
-        document_id (str): The ID of the document being processed.
+        task_id (str): The ID of the document being processed.
         segments (List[Segment]): A list of Segment objects.
 
     Returns:
@@ -196,17 +274,24 @@ async def handle_entity(document_id: str, segments: List[Segment]) -> Dict[str, 
         # Create a structured input for the LLM
         # Combine all segments into one structured text block
         structured_text = []
-        for segment_list in segments:
-            for segment in segment_list:
-                segment_text = (
-                    f"<segment id='{segment.serial}' relates_to='{segment.relates_to}' "
-                    f"relationship_type='{segment.relationship_type}'>"
-                    f"{segment.text}</segment>"
-                )
-                structured_text.append(segment_text)
+        # for segment_list in segments:
+        #     for segment in segment_list:
+        #         segment_text = (
+        #             f"<segment id='{segment.serial}' relates_to='{segment.relates_to}' "
+        #             f"relationship_type='{segment.relationship_type}'>"
+        #             f"{segment.text}</segment>"
+        #         )
+        #         structured_text.append(segment_text)
+        for segment in segments:
+            segment_text = (
+                f"<segment id='{segment.serial}' relates_to='{segment.relates_to}' "
+                f"relationship_type='{segment.relationship_type}'>"
+                f"{segment.text}</segment>"
+            )
+            structured_text.append(segment_text)
 
         combined_text = "\n".join(structured_text)
-        logger.info(f"Document ID: {document_id}, Structured Combined Text: {combined_text}")
+        logger.info(f"Document ID: {task_id}, Structured Combined Text: {combined_text}")
 
         # Send the combined structured text for entity extraction
         raw_entities = await get_entities(combined_text)
@@ -215,7 +300,7 @@ async def handle_entity(document_id: str, segments: List[Segment]) -> Dict[str, 
 
         # Parse the entities CSV content
         parsed_entities = await parse_csv_content(entities_csv)
-        logger.info(f"Document ID: {document_id}, Parsed Entities: {parsed_entities}")
+        logger.info(f"Document ID: {task_id}, Parsed Entities: {parsed_entities}")
 
         # Convert parsed entities into Entity objects and attach the segment serial
         entity_list = []
@@ -234,8 +319,10 @@ async def handle_entity(document_id: str, segments: List[Segment]) -> Dict[str, 
                 continue
         
         # Insert all entities and token usage into the database
-        await insert_entities(document_id, entity_list)
-        await insert_token_consumption(document_id, "OpenAI", "Entity Recognition", token_usage)
+        await asyncio.gather(
+            insert_entities(task_id, entity_list),
+            insert_token_consumption(task_id, "OpenAI", "Entity Recognition", token_usage)
+        )
 
         return {
             "entities": entity_list,
@@ -243,9 +330,54 @@ async def handle_entity(document_id: str, segments: List[Segment]) -> Dict[str, 
         }
 
     except Exception as e:
-        logger.error(f"Failed to extract entities for document ID: {document_id}: {e}")
+        logger.error(f"Failed to extract entities for document ID: {task_id}: {e}")
         raise
 
+async def topic_modeling(task_id: str, result: List[Dict[str, Any]]):
+    """
+    Perform topic modeling on the document text and insert the topics into the database.
+
+    Args:
+        document_text (str): The text of the document to perform topic modeling on.
+
+    Returns:
+        List[str]: A list of topics extracted from the document.
+    """
+    try:
+        text = ""
+        for segment in result:
+            text += segment["text"]
+
+        topics = topic_modeling_pipeline.run([text])
+        if not topics:
+            raise ValueError("No topics found in the document.")
+        await insert_topics(task_id, topics)
+        return topics
+    except Exception as e:
+        logger.error(f"Failed to perform topic modeling for document ID: {task_id}: {e}")
+        raise
+
+async def tfidf_extraction(task_id: str, segments: List[Segment]):
+    """
+    Perform TF-IDF keyword extraction on the document segments and insert the keywords into the database.
+
+    Args:
+        document_id (str): The ID of the document being processed.
+        segments (List[Segment]): A list of Segment objects.
+
+    Returns:
+        List[str]: A list of TF-IDF keywords extracted from the document.
+    """
+    try:
+        document_text = "\n".join([segment.text for segment in segments])
+        tfidf_keywords = await tfidf_extractor.extract_keywords(document_text)
+        if not tfidf_keywords:
+            raise ValueError("No TF-IDF keywords found in the document.")
+        await insert_tf_idf_keywords(task_id, tfidf_keywords)
+        return tfidf_keywords
+    except Exception as e:
+        logger.error(f"Failed to extract TF-IDF keywords for Task ID: {task_id}: {e}")
+        raise
 
 if __name__ == "__main__":
     from fastapi.testclient import TestClient
@@ -262,5 +394,5 @@ if __name__ == "__main__":
         UploadFile(filename="sample.jpg", content_type="image/jpeg"),
     ]
     
-    response = client.post("/convert_v1/", files=files)
+    response = client.post("/convert", files=files)
     print(response.json())

@@ -63,37 +63,37 @@ async def insert_task(document_ids: List[str]):
         logger.error(f"Failed to insert task: {e}")
         raise
 
-async def insert_segments(document_id: str, segments: List[Segment]):
+async def insert_segments(task_id: str, segments: List[Segment]):
     """
     Insert the document data and its segments into the MongoDB database.
 
     Args:
-        document_id (str): The ID of the document to which the segments belong.
+        task_id (str): The ID of the documents to which the segments belong.
         segments (List[in_Segment]): A list of Segment model instances to be inserted.
 
     Raises:
         Exception: If there's an error during the insertion process.
     """
     try:
-        # Convert Segment models to dictionaries and add the document_id to each segment
+        # Convert Segment models to dictionaries and add the task_id to each segment
         segment_dicts = [segment.dict() for segment in segments]
         for segment in segment_dicts:
-            segment["document_id"] = document_id
+            segment["task_id"] = task_id
         
         # Insert the segments into the Segments collection
         settings.mongo_client["Segments"].insert_many(segment_dicts)
-        logger.info(f"Successfully inserted {len(segment_dicts)} segments for document ID: {document_id}")
+        logger.info(f"Successfully inserted {len(segment_dicts)} segments for task ID: {task_id}")
     
     except Exception as e:
-        logger.error(f"Failed to insert segments for document ID: {document_id}: {e}")
+        logger.error(f"Failed to insert segments for task ID: {task_id}: {e}")
         raise
 
-async def insert_entities(document_id: Optional[str], entities: List[Entity]):
+async def insert_entities(task_id: Optional[str], entities: List[Entity]):
     """
     Insert entity records into the MongoDB database.
 
     Args:
-        document_id (str): The ID of the document to which the entities belong.
+        task_id (str): The ID of the documents to which the entities belong.
         entities (List[Entity]): A list of Entity model instances to be inserted.
 
     Raises:
@@ -105,7 +105,7 @@ async def insert_entities(document_id: Optional[str], entities: List[Entity]):
         for entity in entities:
             if isinstance(entity, Entity):
                 entity_dict = entity.dict()
-                entity_dict["document_id"] = document_id
+                entity_dict["task_id"] = task_id
                 entity_dicts.append(entity_dict)
             else:
                 logger.error(f"Invalid entity type: {type(entity)}. Expected Entity instance.")
@@ -113,21 +113,21 @@ async def insert_entities(document_id: Optional[str], entities: List[Entity]):
         # Insert the entities into the Entities collection
         if entity_dicts:
             await settings.mongo_client["Entities"].insert_many(entity_dicts)
-            logger.info(f"Successfully inserted {len(entity_dicts)} entities for document ID: {document_id}")
+            logger.info(f"Successfully inserted {len(entity_dicts)} entities for task ID: {task_id}")
         else:
-            logger.warning(f"No valid entities to insert for document ID: {document_id}")
+            logger.warning(f"No valid entities to insert for task ID: {task_id}")
     
     except Exception as e:
-        logger.error(f"Failed to insert entities for document ID: {document_id}: {e}")
+        logger.error(f"Failed to insert entities for task ID: {task_id}: {e}")
         raise
 
 
-async def insert_classification(document_id: str, classification: Classification):
+async def insert_classification(task_id: str, classification: Classification):
     """
     Insert document classification record into the MongoDB database.
 
     Args:
-        document_id (str): The ID of the document to which the classification belongs.
+        task_id (str): The ID of the documents to which the classification belongs.
         classification (Classification): The classification object containing label and score.
 
     Raises:
@@ -136,25 +136,24 @@ async def insert_classification(document_id: str, classification: Classification
     try:
         # Convert the Classification model to a dictionary and prepare the classification record
         classification_record = {
-            "document_id": document_id,
-            "label": classification.label,
-            "description": classification.description,
+            "task_id": task_id,
+            "text": classification.text,
         }
         
         # Insert the classification record into the DocumentClassification collection
         await settings.mongo_client["DocumentClassification"].insert_one(classification_record)
-        logger.info(f"Successfully inserted classification for document ID: {document_id}")
+        logger.info(f"Successfully inserted classification for task ID: {task_id}")
     
     except Exception as e:
-        logger.error(f"Failed to insert classification for document ID: {document_id}: {e}")
+        logger.error(f"Failed to insert classification for task ID: {task_id}: {e}")
         raise
 
-async def insert_topics(document_id: Optional[str], topics: List[Topic]):
+async def insert_topics(task_id: Optional[str], topics: List[Topic]):
     """
     Insert the topics generated for a document into the database.
 
     Args:
-        document_id (str): The ID of the document.
+        task_id (str): The ID of the documents to which the topics belong.
         topics (List[Topic]): A list of Topic instances representing the topics generated for the document.
     
     Raises:
@@ -164,33 +163,33 @@ async def insert_topics(document_id: Optional[str], topics: List[Topic]):
         # Convert the Topic models to dictionaries and prepare the topic records
         topic_records = [topic.dict() for topic in topics]
         for topic in topic_records:
-            topic["document_id"] = document_id
+            topic["task_id"] = task_id
         
         # Insert the topic records into the Topics collection
         await settings.mongo_client["Topics"].insert_many(topic_records)
-        logger.info(f"Successfully inserted {len(topic_records)} topics for document ID: {document_id}")
+        logger.info(f"Successfully inserted {len(topic_records)} topics for task ID: {task_id}")
 
     except Exception as e:
-        logger.error(f"Failed to insert topics for document ID: {document_id}: {e}")
+        logger.error(f"Failed to insert topics for task ID: {task_id}: {e}")
         raise
 
-async def insert_tf_idf_keywords(document_id: Optional[str], keywords: List[str]):
+async def insert_tf_idf_keywords(task_id: Optional[str], keywords: List[str]):
     """
     Insert the TF-IDF keywords generated for a document into the database.
     """
     try:
         # Prepare the keyword records with the document_id
-        keyword_records = [{"document_id": document_id, "keyword": keyword} for keyword in keywords]
+        keyword_records = [{"task_id": task_id, "keyword": keyword} for keyword in keywords]
         
         # Insert the keyword records into the TFIDFKeywords collection
         await settings.mongo_client["TFIDFKeywords"].insert_many(keyword_records)
-        logger.info(f"Successfully inserted {len(keyword_records)} TF-IDF keywords for document ID: {document_id}")
+        logger.info(f"Successfully inserted {len(keyword_records)} TF-IDF keywords for task ID: {task_id}")
 
     except Exception as e:
-        logger.error(f"Failed to insert TF-IDF keywords for document ID: {document_id}: {e}")
+        logger.error(f"Failed to insert TF-IDF keywords for task ID: {task_id}: {e}")
         raise
 
-async def insert_questions(document_id: str, questions: List[Dict[str, Any]], combined_keywords: List[str]):
+async def insert_questions(task_id: str, questions: List[Dict[str, Any]]):
     """
     Insert the generated questions into the Questions collection in the database.
 
@@ -204,37 +203,36 @@ async def insert_questions(document_id: str, questions: List[Dict[str, Any]], co
     try:
         # Ensure questions_with_scores is of type GeneratedQuestionsWithScores
         formatted_questions = {
-            "document_id": document_id,
+            "task_id": task_id,
             "questions": questions,
-            "combined_keywords": combined_keywords
         }
         
         await settings.mongo_client["Questions"].insert_one(formatted_questions)
 
-        logger.info("Successfully inserted questions into the database.")
+        logger.info(f"Successfully inserted {len(questions)} questions into the database for task ID: {task_id}")
 
     except Exception as e:
         # Log the error and raise it again for further handling if necessary.
-        logger.error(f"Failed to insert questions into the database: {e}")
+        logger.error(f"Failed to insert questions into the database for task ID: {task_id}: {e}")
         raise
 
-async def insert_token_consumption(document_id: str, llm_client: str, consumer: str, token_usage: Dict[str, int]):
+async def insert_token_consumption(task_id: str, llm_client: str, consumer: str, token_usage: Dict[str, int]):
     """
     Insert the token consumption data into the database.
 
     Args:
-        document_id (str): The ID of the document.
+        task_id (str): The ID of the documents to which the token consumption data belongs.
         token_usage (Dict[str, int]): A dictionary containing the token usage data.
     """
     try:
         if not token_usage:
-            logger.warning(f"Token usage data is empty for document ID: {document_id}")
+            logger.warning(f"Token usage data is empty for task ID: {task_id}")
             return
         
         # Prepare the token records with the document_id
         token_records = [
             {
-                "document_id": document_id, 
+                "task_id": task_id, 
                 "llm_client": llm_client,
                 "consumer": consumer,
                 "token": token,
@@ -250,12 +248,12 @@ async def insert_token_consumption(document_id: str, llm_client: str, consumer: 
 
         # Insert the token records into the TokenUsage collection
         await settings.mongo_client["TokenUsage"].insert_many(token_records)
-        logger.info(f"Successfully inserted token usage data for document ID: {document_id}")
+        logger.info(f"Successfully inserted token usage data for task ID: {task_id}")
 
     except PyMongoError as e:
-        logger.error(f"MongoDB error occurred while inserting token usage data for document ID: {document_id}: {e}")
+        logger.error(f"MongoDB error occurred while inserting token usage data for task ID: {task_id}: {e}")
         raise
 
     except Exception as e:
-        logger.error(f"Unexpected error occurred while inserting token usage data for document ID: {document_id}: {e}")
+        logger.error(f"Unexpected error occurred while inserting token usage data for task ID: {task_id}: {e}")
         raise

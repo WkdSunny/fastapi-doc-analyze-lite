@@ -43,12 +43,18 @@ class Classification(BaseModel):
     """
     Represents a classification result for a document.
     """
-    label: str
-    description: str
+    text: str
 
 class Topic(BaseModel):
     serial: int
     words: List[str]
+
+class TFIDFKeyword(BaseModel):
+    """
+    Represents a keyword extracted using TF-IDF.
+    """
+    keyword: str
+    score: Optional[float] = 1.0
 
 class GeneratedQuestion(BaseModel):
     """

@@ -3,14 +3,11 @@
 This module defines a service class for segmenting documents into smaller units.
 """
 
-import re
 import spacy
 from typing import List, Dict, Any
 from sentence_transformers import SentenceTransformer, util
-import app.services.db.insert as insert_segments
 from app.models.rag_model import Segment
 from app.config import logger
-
 
 class DocumentSegmenter:
     """
@@ -30,7 +27,8 @@ class DocumentSegmenter:
             logger.error(f"Error initializing DocumentSegmenter: {e}")
             raise
 
-    async def segment_document(self, result: Dict[str, Any], document_type: str) -> List[Segment]:
+    # async def segment_document(self, result: Dict[str, Any], document_type: str) -> List[Segment]:
+    async def segment_document(self, result: List[Dict[str, Any]]) -> List[Segment]:
         """
         Segment a document into smaller units (e.g., sentences, tables, lists, figures) and establish relationships between them.
 
@@ -45,15 +43,21 @@ class DocumentSegmenter:
             Exception: If there's an error during the segmentation process.
         """
         try:
-            text = result.get("text", "")
+            text = ""
+            for doc in result:
+                # Combine text from all files
+                text += f"{doc['text']}/n"
+            
             segments = []
 
-            if "pdf" in document_type or "image" in document_type:
-                # Run bounding box segmentation directly
-                segments += await self._segment_with_bounding_boxes(result)
-            else:
-                # Run spaCy segmentation directly
-                segments += await self._segment_with_spacy(text)
+            # if "pdf" in document_type or "image" in document_type:
+            #     # Run bounding box segmentation directly
+            #     segments += await self._segment_with_bounding_boxes(result)
+            # else:
+            #     # Run spaCy segmentation directly
+            #     segments += await self._segment_with_spacy(text)
+
+            segments += await self._segment_with_spacy(text)
 
             # Identify and segment non-linear elements (like tables, figures, lists)
             segments += await self._segment_non_linear_elements(result)
@@ -66,30 +70,30 @@ class DocumentSegmenter:
             logger.error(f"Error segmenting document: {e}")
             raise
 
-    async def _segment_with_bounding_boxes(self, result: Dict[str, Any]) -> List[Segment]:
-        """
-        Segment a document using bounding box information. Used for PDFs or image-based documents.
+    # async def _segment_with_bounding_boxes(self, result: Dict[str, Any]) -> List[Segment]:
+    #     """
+    #     Segment a document using bounding box information. Used for PDFs or image-based documents.
 
-        Args:
-            result (Dict[str, Any]): The result of processing the document.
+    #     Args:
+    #         result (Dict[str, Any]): The result of processing the document.
 
-        Returns:
-            List[Segment]: A list of Segment instances representing the segmented units.
-        """
-        try:
-            logger.info("Segmenting document using bounding boxes.")
-            segments = [
-                Segment(
-                    serial=index,
-                    text=bbox["text"],
-                    confidence=float(bbox["confidence"])
-                )
-                for index, bbox in enumerate(result.get("bounding_boxes", []))
-            ]
-            return segments
-        except Exception as e:
-            logger.error(f"Error in bounding box segmentation: {e}")
-            raise
+    #     Returns:
+    #         List[Segment]: A list of Segment instances representing the segmented units.
+    #     """
+    #     try:
+    #         logger.info("Segmenting document using bounding boxes.")
+    #         segments = [
+    #             Segment(
+    #                 serial=index,
+    #                 text=bbox["text"],
+    #                 confidence=float(bbox["confidence"])
+    #             )
+    #             for index, bbox in enumerate(result.get("bounding_boxes", []))
+    #         ]
+    #         return segments
+    #     except Exception as e:
+    #         logger.error(f"Error in bounding box segmentation: {e}")
+    #         raise
 
     async def _segment_with_spacy(self, text: str) -> List[Segment]:
         """

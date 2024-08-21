@@ -108,7 +108,7 @@ async def init_db():
             "Questions", 
             "Answers", 
             "Labels",
-            "Tokens"
+            "TokenUsage"
         ]
         database = settings.mongo_client
 
