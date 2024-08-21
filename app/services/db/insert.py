@@ -3,12 +3,10 @@
 This module defines the database insertion functions for the FastAPI application.
 """
 
-from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import PyMongoError
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from app.models.rag_model import Segment, Entity, Topic, Classification, GeneratedQuestionsWithScores, QuestionGenerationResult
-from app.utils.date_utils import convert_to_iso_date
 from app.config import settings, logger
 
 async def insert_documents(file_name: str, result: str) -> str:
@@ -103,12 +101,21 @@ async def insert_entities(document_id: Optional[str], entities: List[Entity]):
     """
     try:
         # Convert input Entity models to output Entity models and then to dictionaries
+        entity_dicts = []
         for entity in entities:
-            entity["document_id"] = document_id
-        
+            if isinstance(entity, Entity):
+                entity_dict = entity.dict()
+                entity_dict["document_id"] = document_id
+                entity_dicts.append(entity_dict)
+            else:
+                logger.error(f"Invalid entity type: {type(entity)}. Expected Entity instance.")
+
         # Insert the entities into the Entities collection
-        await settings.mongo_client["Entities"].insert_many(entities)
-        logger.info(f"Successfully inserted {len(entities)} entities for document ID: {document_id}")
+        if entity_dicts:
+            await settings.mongo_client["Entities"].insert_many(entity_dicts)
+            logger.info(f"Successfully inserted {len(entity_dicts)} entities for document ID: {document_id}")
+        else:
+            logger.warning(f"No valid entities to insert for document ID: {document_id}")
     
     except Exception as e:
         logger.error(f"Failed to insert entities for document ID: {document_id}: {e}")
@@ -131,7 +138,7 @@ async def insert_classification(document_id: str, classification: Classification
         classification_record = {
             "document_id": document_id,
             "label": classification.label,
-            "score": float(classification.score)
+            "description": classification.description,
         }
         
         # Insert the classification record into the DocumentClassification collection

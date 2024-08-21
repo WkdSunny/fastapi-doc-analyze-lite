@@ -42,8 +42,6 @@ def CountTokens(usage_data: Optional[dict]) -> Optional[dict]:
         logger.warning("Token usage information not found in the response.")
         return None
 
-
-
 def iac_user_prompt ():
     prompt =  """
         Here is the details of the task:

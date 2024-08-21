@@ -10,10 +10,10 @@ import asyncio
 # Load the SpaCy model
 nlp = spacy.load("en_core_web_sm")
 
-async def process_with_spacy(texts: List[str]) -> List[str]:
-    """Process a list of texts with SpaCy to extract dates."""
-    docs = list(nlp.pipe(texts, disable=["parser", "ner"]))  # Disable unnecessary components for efficiency
-    return docs
+# async def process_with_spacy(texts: List[str]) -> List[str]:
+#     """Process a list of texts with SpaCy to extract dates."""
+#     docs = list(nlp.pipe(texts, disable=["parser", "ner"]))  # Disable unnecessary components for efficiency
+#     return docs
 
 async def convert_to_iso_date(text: Union[str, List[str]]) -> Union[str, List[str]]:
     """
@@ -34,24 +34,15 @@ async def convert_to_iso_date(text: Union[str, List[str]]) -> Union[str, List[st
         except (ParserError, ValueError):
             return s
 
-    if isinstance(text, str):
-        # Process a single string
-        doc = nlp(text)
-        for ent in doc.ents:
-            if ent.label_ == "DATE":
-                return convert_date(ent.text)
-        return text  # Return the original text if no date entity is found
-    elif isinstance(text, list):
-        # Process a list of strings asynchronously
-        docs = await process_with_spacy(text)
-        converted_dates = []
-        for doc in docs:
-            converted_text = doc.text
-            for ent in doc.ents:
-                if ent.label_ == "DATE":
-                    converted_text = convert_date(ent.text)
-            converted_dates.append(converted_text)
-        return converted_dates
+     # Process the text with SpaCy to identify any date entities
+    doc = nlp(text)
+
+    # If the entire text is recognized as a date entity, convert it
+    if len(doc.ents) == 1 and doc.ents[0].label_ == "DATE" and doc.ents[0].text == text:
+        return convert_date(doc.ents[0].text)
+    
+    # If not a standalone date, return the original text
+    return text
 
 # Example usage within an asynchronous context
 async def process_row(headers, row):

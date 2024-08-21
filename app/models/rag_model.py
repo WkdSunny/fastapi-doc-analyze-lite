@@ -23,20 +23,28 @@ class Segment(BaseModel):
     serial: int
     text: str
     confidence: float
+    relates_to: Optional[int] = None
+    relationship_type: Optional[str] = None
 
 class Entity(BaseModel):
     """
     Represents an entity extracted from a document.
     """
+    serial: int
     entity: str
     text: str
+    description: Optional[str] = None
+    score: Optional[float] = 1
+    start: Optional[int] = 0
+    end: Optional[int] = 0
+    segment_serial: Optional[int] = None
 
 class Classification(BaseModel):
     """
     Represents a classification result for a document.
     """
     label: str
-    score: float
+    description: str
 
 class Topic(BaseModel):
     serial: int

@@ -16,9 +16,9 @@ def clear_collections(db_name, collections):
 
 if __name__ == "__main__":
     # Specify the database name
-    database_name = "doc_analyse"  # Replace with your database name
+    database_name = "doc_analyse_lite"
 
-    # Specify the collections you want to clear
+    # Specify the collections to clear
     collections_to_clear = [
         "Tasks", 
         "Documents", 

@@ -1,60 +1,41 @@
-# /app/routers/convert.py
+# # convert_v1.py
 """
 This module defines the conversion routes for the FastAPI application.
 """
 
 import asyncio
-from typing import List, Dict, Any
-from fastapi import APIRouter, File, UploadFile, HTTPException, Request
+from typing import List, Dict, Any, Optional
+from fastapi import APIRouter, File, UploadFile, HTTPException
 from app.config import settings, logger
-from app.config import logger
-from app.services.document_processors.pdf.textract import useTextract
 from app.tasks.pdf_tasks import process_pdf
 from app.tasks.excel_tasks import process_excel
 from app.tasks.word_tasks import process_word
 from app.tasks.img_tasks import process_img
-from app.services.file_processing import save_temp_file, get_file_type, call_question_generation_api
-# from app.services.document_classification import DocumentClassifier
-# from app.services.entity_recognition import EntityRecognizer
-# from app.services.document_segmentation import DocumentSegmenter
-# from app.services.topic_modeling.pipeline import TopicModelingPipeline
-# from app.services.tfidf_extraction import TFIDFExtractor
-# from app.services.db.insert import insert_documents, insert_segments, insert_entities, insert_classification, insert_topics
 from app.tasks.celery_tasks import wait_for_celery_task
-# from app.models.rag_model import Segment, Entity, Topic, Classification
+from app.services.file_processing import save_temp_file, get_file_type
+from app.services.db.insert import insert_documents, insert_task, insert_segments, insert_classification, insert_entities, insert_token_consumption
+# from app.services.document_segmentation import DocumentSegmenter
+from app.services.prompt_engine.document_segmentation import DocumentSegmenter
+from app.services.prompt_engine.document_classification import classify_documents
+from app.services.prompt_engine.entity_recognition import get_entities
+# from app.services.document_classification import DocumentClassifier
+from app.services.rag.questions.hybrid_questions import IntegratedQuestionGeneration
+from app.models.rag_model import Segment, Classification, Entity
+from app.utils.csv_utils import parse_csv_content
 
 router = APIRouter(
     prefix="/convert",
     tags=["convert"]
 )
 
-# database = settings.database
+document_segmenter = DocumentSegmenter()
+# document_classifier = DocumentClassifier()
 
 @router.post("/", response_model=Dict[str, Any])
-async def convert_files(request: Request, files: List[UploadFile] = File(...)):
-    """
-    Convert the uploaded files to text and process them for further analysis.
-
-    Args:
-        request (Request): The incoming request object.
-        files (List[UploadFile]): The list of files to be processed.
-
-    Returns:
-        Dict[str, Any]: A dictionary containing the processing results.
-
-    Raises:
-        HTTPException: If there's an error during the file processing.
-    """
-    responses = []
-    # segments_all: List[Segment] = []
-    # entities_all: List[Entity] = []
-    # topics_all: List[Topic] = []
-    # classifications_all: List[Classification] = []
-
-    # document_classifier = DocumentClassifier()
-    # entity_recognizer = EntityRecognizer()
-    # document_segmenter = DocumentSegmenter()
-    # tfidf_extractor = TFIDFExtractor()
+async def convert_files(files: List[UploadFile] = File(...)):
+    tasks = []
+    document_results = []
+    task_document_ids = []
 
     for file in files:
         try:
@@ -73,114 +54,213 @@ async def convert_files(request: Request, files: List[UploadFile] = File(...)):
                 logger.info(f"PDF file detected...")
                 task = process_pdf.delay(temp_path)
             elif 'excel' in content_type or 'spreadsheetml' in content_type:
-                logger.info(f"Excel file detected...")
                 task = process_excel.delay(temp_path)
             elif 'wordprocessingml' in content_type or 'msword' in content_type:
-                logger.info(f"Word document detected...")
                 task = process_word.delay(temp_path)
             elif 'image' in content_type:
-                logger.info(f"Image file detected...")
                 task = process_img.delay(temp_path)
             else:
                 logger.error(f"Unsupported file type: {file.filename}")
                 continue
 
-            result = {
-                "document_id": None,
-                "classification": {},
-            }
-            result.update(await wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT))
-
-            # # Prepare document data and segments
-            # document_id = await insert_documents(file.filename, result["text"])
-            # logger.info(f"Inserted document with ID: {document_id} into the database")
-
-            # segments: List[Segment] = await document_segmenter.segment_document(result, content_type)
-            # segments_all.extend(segments)
-
-            # # Perform Entity Recognition on the extracted text
-            # entities: List[Entity] = await entity_recognizer.recognize_entities(result["text"])
-            # entities_all.extend(entities)
-
-            # # Classify the document based on its content
-            # classification: Classification = await document_classifier.classify_document(result["text"])
-            # classifications_all.append({
-            #     "document_id": document_id,
-            #     "classification": classification
-            # })
-            # logger.info(f"Classified document with ID: {document_id} as {classification.label}")
-
-            # doc_type = {
-            #     "label": classification.label,
-            #     "score": classification.score
-            # }
-
-            # result["document_id"] = document_id
-            # result["classification"] = doc_type
-            responses.append(result)
-
+            # Wait for the Celery task to complete and handle the result
+            file_task = asyncio.create_task(handle_file_result(file.filename, task, content_type))
+            tasks.append(file_task)
         except Exception as e:
             logger.error(f"Failed to process file {file.filename}: {e}")
+            continue
 
-    # After processing all files, insert data into the database
-    # if segments_all:
-    #     await insert_segments(document_id, segments_all)
-    # # document_segmenter.unload()
+    # Run all tasks concurrently and gather results
+    document_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # if entities_all:
-    #     await insert_entities(document_id, entities_all)
-    #     logger.info(f"Inserted {len(entities_all)} entities for documents.")
-    # entity_recognizer.unload()
+    # Filter out successful results
+    for result in document_results:
+        if not isinstance(result, Exception):
+            task_document_ids.append(result["document_id"])
 
-    # for classification_data in classifications_all:
-    #     await insert_classification(classification_data["document_id"], classification_data["classification"])
-    #     logger.info(f"Classified document with ID: {classification_data['document_id']}")
-    # document_classifier.unload()
+    # Insert the Task document with all document IDs
+    task_id = await insert_task(task_document_ids)
 
-    # # Example text documents extracted after processing
-    # extracted_texts = [result["text"] for result in responses]
-    # logger.info(f"Extracted texts: {extracted_texts}")
-
-    # # Run topic modeling
-    # topic_modeling_pipeline = TopicModelingPipeline(num_topics=5, passes=10)
-    # topics_all = topic_modeling_pipeline.run(extracted_texts)
-
-    # # Store topics in the database
-    # for result in responses:
-    #     document_id = result["document_id"]
-    #     await insert_topics(document_id, topics_all)  # Insert topics for each document
-    #     logger.info(f"Inserted topics for document ID: {document_id}")
-
-    # 
-
-    # Generate questions
-    # entity_words = [entity.word for entity in entities_all]
-    # topic_words = [word for topic in topics_all for word in topic.words]
-    # logger.info(f"Entities from convert: {entity_words}, Topics from convert: {topic_words}")
-    # await call_question_generation_api(
-    #     request, 
-    #     document_id, 
-    #     entity_words, 
-    #     topic_words
-    # )
-    # logger.info(f"Questions generated for document ID: {document_id}")
-
-    if not responses:
+    if not document_results:
         raise HTTPException(status_code=500, detail="No files processed successfully")
 
     return {
         "status": 200,
         "success": True,
-        "result": responses
+        "result": {
+            "task_id": task_id,
+            "document_data": [result for result in document_results if not isinstance(result, Exception)]
+        }
     }
 
+async def handle_file_result(file_name: str, task, content_type: str):
+    """
+    Handle the result of a file processing task by waiting for the task to complete,
+    inserting the document into the database, segmenting, classifying, and generating questions.
+
+    Args:
+        file_name (str): The name of the file being processed.
+        task (Task): The Celery task processing the file.
+        content_type (str): The content type of the file being processed.
+
+    Returns:
+        Dict[str, Any]: The response containing the document ID, file name, and generated questions.
+    """
+    try:
+        # Wait for the Celery task to complete
+        result = await wait_for_celery_task(task.id, settings.PDF_PROCESSING_TIMEOUT)
+
+        # Insert the processed document into the database
+        document_id = await insert_documents(file_name, result)
+
+        # Handle segmentation and classification in parallel
+        segmentation_task = handle_segmentation(document_id, result, content_type)
+        # classification_task = handle_classification(document_id, result)
+        classification_task = handle_classification(document_id, result, content_type)
+
+        # Run the segmentation and classification tasks concurrently
+        # await asyncio.gather(segmentation_task, classification_task)
+        segments, classification = await asyncio.gather(segmentation_task, classification_task)
+        logger.info(f"Segments: {segments}")
+        logger.info(f"Classification: {classification}")
+        # entities_result = await handle_entity(document_id, segments)
+
+        # Step 7: Generate questions using the IntegratedQuestionGeneration service
+        # question_generator = IntegratedQuestionGeneration()
+        # questions_with_scores = await question_generator.generate_questions(result["text"], document_id)
+
+        # Return the final result with document ID, file name, and generated questions
+        final_result = {
+            "document_id": document_id,
+            "file_name": file_name,
+            "text": result,
+            "segments": segments,
+            # "entity_list": entities_result
+            "classification": classification
+        }
+        return final_result
+
+    except Exception as e:
+        logger.error(f"Error processing file {file_name}: {e}")
+        raise
+
+async def handle_segmentation(document_id: str, result: Dict[str, Any], content_type: str):
+    """
+    Handle segmentation of the document and insert the segments into the database.
+    
+    Args:
+        document_id (str): The ID of the document.
+        result (Dict[str, Any]): The result from the document processing containing the text.
+        content_type (str): The content type of the document.
+    """
+    try:
+        segments: List[Segment] = await document_segmenter.segment_document(result, content_type)
+        await insert_segments(document_id, segments)
+        logger.info(f"Successfully segmented and inserted segments for document ID: {document_id}")
+        return segments
+    except Exception as e:
+        logger.error(f"Failed to segment or insert segments for document ID: {document_id}: {e}")
+
+async def handle_classification(document_id: str, result: Dict[str, Any], content_type: str):
+    try:
+        classification_result = await classify_documents(result["text"], content_type)
+        logger.debug(f"Classification result: {classification_result}")
+        classification = classification_result["classification"][0]
+        logger.debug(f"Classification: {classification}")
+        token_usage = classification_result["usage"]
+        logger.debug(f"Token usage: {token_usage}")
+
+        foramtted_classification = Classification(
+            label=classification["classification"],
+            description=classification["description"]
+        )
+        await insert_classification(document_id, foramtted_classification)
+        await insert_token_consumption(document_id, "OpenAI", "Document Classification", token_usage)
+        return foramtted_classification
+    except Exception as e:
+        logger.error(f"Failed to classify document ID: {document_id}: {e}")
+        raise
+
+async def handle_entity(document_id: str, segments: List[Segment]) -> Dict[str, Optional[str]]:
+    """
+    Perform entity recognition on all segments at once while preserving relationships.
+
+    Args:
+        document_id (str): The ID of the document being processed.
+        segments (List[Segment]): A list of Segment objects.
+
+    Returns:
+        Dict[str, Optional[str]]: A dictionary containing the entities and token usage.
+    """
+    try:
+        # Create a structured input for the LLM
+        # Combine all segments into one structured text block
+        structured_text = []
+        for segment_list in segments:
+            for segment in segment_list:
+                segment_text = (
+                    f"<segment id='{segment.serial}' relates_to='{segment.relates_to}' "
+                    f"relationship_type='{segment.relationship_type}'>"
+                    f"{segment.text}</segment>"
+                )
+                structured_text.append(segment_text)
+
+        combined_text = "\n".join(structured_text)
+        logger.info(f"Document ID: {document_id}, Structured Combined Text: {combined_text}")
+
+        # Send the combined structured text for entity extraction
+        raw_entities = await get_entities(combined_text)
+        entities_csv = raw_entities["entities"]
+        token_usage = raw_entities["token_usage"]
+
+        # Parse the entities CSV content
+        parsed_entities = await parse_csv_content(entities_csv)
+        logger.info(f"Document ID: {document_id}, Parsed Entities: {parsed_entities}")
+
+        # Convert parsed entities into Entity objects and attach the segment serial
+        entity_list = []
+        for i, entity_data in enumerate(parsed_entities):
+            try:
+                entity = Entity(
+                    serial=i+1,
+                    entity=entity_data.get("category"),
+                    text=entity_data.get("entity"),
+                    description=entity_data.get("entity_description"),
+                    segment_serial=int(entity_data.get("segment_serial", 0))
+                )
+                entity_list.append(entity)
+            except Exception as e:
+                logger.error(f"Failed to create entity object: {e}")
+                continue
+        
+        # Insert all entities and token usage into the database
+        await insert_entities(document_id, entity_list)
+        await insert_token_consumption(document_id, "OpenAI", "Entity Recognition", token_usage)
+
+        return {
+            "entities": entity_list,
+            "token_usage": token_usage
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to extract entities for document ID: {document_id}: {e}")
+        raise
+
+
 if __name__ == "__main__":
+    from fastapi.testclient import TestClient
+    from fastapi import FastAPI
+
+    app = FastAPI()
+    app.include_router(router)
+
+    client = TestClient(app)
     files = [
         UploadFile(filename="sample.pdf", content_type="application/pdf"),
         UploadFile(filename="sample.xlsx", content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
         UploadFile(filename="sample.docx", content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
         UploadFile(filename="sample.jpg", content_type="image/jpeg"),
-        UploadFile(filename="sample.txt", content_type="text/plain")
     ]
-    results = asyncio.run(convert_files(files))
-    print(results)
+    
+    response = client.post("/convert_v1/", files=files)
+    print(response.json())
