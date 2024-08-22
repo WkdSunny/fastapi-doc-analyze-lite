@@ -13,6 +13,7 @@ from app.tasks.word_tasks import process_word
 from app.tasks.img_tasks import process_img
 from app.tasks.celery_tasks import wait_for_celery_task
 from app.services.file_processing import save_temp_file, get_file_type
+
 from app.services.db.insert import (
     insert_documents, 
     insert_task, 
@@ -27,6 +28,7 @@ from app.services.db.insert import (
 from app.services.prompt_engine.document_segmentation import DocumentSegmenter
 from app.services.prompt_engine.document_classification import classify_documents
 from app.services.prompt_engine.entity_recognition import get_entities
+from app.services.prompt_engine.extraction import extract_data
 from app.services.topic_modeling.pipeline import TopicModelingPipeline
 from app.services.tfidf_extraction import TFIDFExtractor
 from app.services.prompt_engine.question_generator import generate_questions
@@ -100,21 +102,33 @@ async def convert_files(files: List[UploadFile] = File(...)):
     # Insert the Task document with all document IDs
     task_id = await insert_task(task_document_ids)
 
-    prompt_generation = await combined_tasks(task_id, document_results)
+    prompt_generation = await combined_tasks(task_id, successful_results)
+
+    # result = {
+    #     "task_id": task_id,
+    #     "document_data": successful_results,
+    #     "other_tasks": prompt_generation
+    # }
 
     result = {
         "task_id": task_id,
-        "document_data": successful_results,
-        "other_tasks": prompt_generation
+        "data": prompt_generation["extracted_data"],
+        "token_usage": prompt_generation["token_usage"]
     }
+
+    # return {
+    #     "status": 200,
+    #     "success": True,
+    #     "result": {
+    #         "task_id": task_id,
+    #         "document_data": [result for result in document_results if not isinstance(result, Exception)]
+    #     }
+    # }
 
     return {
         "status": 200,
         "success": True,
-        "result": {
-            "task_id": task_id,
-            "document_data": [result for result in document_results if not isinstance(result, Exception)]
-        }
+        "result": result
     }
 
 async def handle_file_result(file_name: str, task):
@@ -188,28 +202,44 @@ async def combined_tasks(task_id: str, result: List[Dict[str, Any]]):
         # Handle segmentation and classification in parallel
         segmentation_task = handle_segmentation(task_id, result)
         classification_task = handle_classification(task_id, result)
-        topic_modeling_task = topic_modeling(task_id, result)
+        # topic_modeling_task = topic_modeling(task_id, result)
 
-        # Run the segmentation and classification tasks concurrently
-        segments, classification, topics = await asyncio.gather(segmentation_task, classification_task, topic_modeling_task)
+        # # Run the segmentation and classification tasks concurrently
+        # segments, classification, topics = await asyncio.gather(segmentation_task, classification_task, topic_modeling_task)
+        segments, classification_result = await asyncio.gather(segmentation_task, classification_task)
+        classification = classification_result["classification"]
+        token_usage_classify = classification_result["token_usage"]
         logger.info(f"Segments: {segments}")
-        logger.info(f"Classification: {classification}")
-        logger.info(f"Topics: {topics}")
+        logger.info(f"Classification: {classification_result}")
+        # logger.info(f"Topics: {topics}")
 
-        entities_task = handle_entity(task_id, segments)
-        tfidf_extraction_task = tfidf_extraction(task_id, segments)
+        # entities_task = handle_entity(task_id, segments)
+        # tfidf_extraction_task = tfidf_extraction(task_id, segments)
 
-        # # Run the entity recognition and TF-IDF extraction tasks concurrently
-        entities_result, tfidf_keywords = await asyncio.gather(entities_task, tfidf_extraction_task)
-        logger.info(f"Entities: {entities_result}")
-        logger.info(f"TF-IDF Keywords: {tfidf_keywords}")
+        # # # Run the entity recognition and TF-IDF extraction tasks concurrently
+        # entities_result, tfidf_keywords = await asyncio.gather(entities_task, tfidf_extraction_task)
+        # logger.info(f"Entities: {entities_result}")
+        # logger.info(f"TF-IDF Keywords: {tfidf_keywords}")
 
-        questions = await generate_questions(segments, classification, entities_result["entities"], topics, tfidf_keywords)
-        logger.info(f"Generated Questions: {questions}")
+        # questions = await generate_questions(segments, classification, entities_result["entities"], topics, tfidf_keywords)
+        # logger.info(f"Generated Questions: {questions}")
+        logger.info(f"Passed data is: {result}")
+        extracted_result = await extract_data(result, segments, classification)
+        extracted_data = extracted_result["data"]
+        token_usage_extract = extracted_result["token_usage"]
+        total_token_usage = {
+            "prompt_tokens": token_usage_classify["prompt_tokens"] + token_usage_extract["prompt_tokens"],
+            "completion_tokens": token_usage_classify["completion_tokens"] + token_usage_extract["completion_tokens"],
+            "total_tokens": token_usage_classify["total_tokens"] + token_usage_extract["total_tokens"]
+        }
+
+        await insert_token_consumption(task_id, "OpenAI", "Data Extraction", token_usage_extract)
 
         return {
-            "segments": segments,
+            # "segments": segments,
             # "classification": classification,
+            "extracted_data": extracted_data,
+            "token_usage": total_token_usage
         }
     
     except Exception as e:
@@ -284,9 +314,9 @@ async def handle_entity(task_id: str, segments: List[Segment]) -> Dict[str, Opti
         #         structured_text.append(segment_text)
         for segment in segments:
             segment_text = (
-                f"<segment id='{segment.serial}' relates_to='{segment.relates_to}' "
-                f"relationship_type='{segment.relationship_type}'>"
-                f"{segment.text}</segment>"
+                f"<seg id='{segment.serial}' rel_to='{segment.relates_to}' "
+                f"rel_type='{segment.relationship_type}'>"
+                f"{segment.text}</seg>"
             )
             structured_text.append(segment_text)
 

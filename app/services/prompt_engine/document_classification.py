@@ -1,12 +1,10 @@
 import ast
 from typing import List, Dict, Any
 from app.services.llm_clients.openai import send_openai_request
-from app.models.rag_model import Classification
 from app.utils.llm_utils import clean_prompt
-from app.utils.csv_utils import parse_csv_content
 from app.config import logger
 
-async def classify_documents(result: Dict[str, Any]) -> List[Classification]:
+async def classify_documents(result: Dict[str, Any]):
     try:
         text = grouped_text(result)
         if not text:

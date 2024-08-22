@@ -1,8 +1,3 @@
-# /app/services/prompt_engine/document_segmentation.py
-"""
-This module defines a service class for segmenting documents into smaller units.
-"""
-
 import spacy
 from typing import List, Dict, Any
 from sentence_transformers import SentenceTransformer, util
@@ -27,14 +22,12 @@ class DocumentSegmenter:
             logger.error(f"Error initializing DocumentSegmenter: {e}")
             raise
 
-    # async def segment_document(self, result: Dict[str, Any], document_type: str) -> List[Segment]:
     async def segment_document(self, result: List[Dict[str, Any]]) -> List[Segment]:
         """
         Segment a document into smaller units (e.g., sentences, tables, lists, figures) and establish relationships between them.
 
         Args:
-            result (Dict[str, Any]): The result of processing the document.
-            document_type (str): The type of document being processed (e.g., "text", "pdf").
+            result (List[Dict[str, Any]]): The result of processing the document.
 
         Returns:
             List[Segment]: A list of Segment instances representing the segmented units.
@@ -43,57 +36,22 @@ class DocumentSegmenter:
             Exception: If there's an error during the segmentation process.
         """
         try:
-            text = ""
-            for doc in result:
-                # Combine text from all files
-                text += f"{doc['text']}/n"
+            # Combine text from all files
+            text = "\n".join([doc['text'] for doc in result])
             
-            segments = []
-
-            # if "pdf" in document_type or "image" in document_type:
-            #     # Run bounding box segmentation directly
-            #     segments += await self._segment_with_bounding_boxes(result)
-            # else:
-            #     # Run spaCy segmentation directly
-            #     segments += await self._segment_with_spacy(text)
-
-            segments += await self._segment_with_spacy(text)
-
-            # Identify and segment non-linear elements (like tables, figures, lists)
+            # Step 1: Segment the text using spaCy
+            segments = await self._segment_with_spacy(text)
+            
+            # Step 2: Identify and segment non-linear elements (like tables, figures, lists)
             segments += await self._segment_non_linear_elements(result)
-
-            # Add relationships based on semantic similarity and context
+            
+            # Step 3: Add relationships based on semantic similarity and context
             await self._add_relationships(segments)
 
             return segments
         except Exception as e:
             logger.error(f"Error segmenting document: {e}")
             raise
-
-    # async def _segment_with_bounding_boxes(self, result: Dict[str, Any]) -> List[Segment]:
-    #     """
-    #     Segment a document using bounding box information. Used for PDFs or image-based documents.
-
-    #     Args:
-    #         result (Dict[str, Any]): The result of processing the document.
-
-    #     Returns:
-    #         List[Segment]: A list of Segment instances representing the segmented units.
-    #     """
-    #     try:
-    #         logger.info("Segmenting document using bounding boxes.")
-    #         segments = [
-    #             Segment(
-    #                 serial=index,
-    #                 text=bbox["text"],
-    #                 confidence=float(bbox["confidence"])
-    #             )
-    #             for index, bbox in enumerate(result.get("bounding_boxes", []))
-    #         ]
-    #         return segments
-    #     except Exception as e:
-    #         logger.error(f"Error in bounding box segmentation: {e}")
-    #         raise
 
     async def _segment_with_spacy(self, text: str) -> List[Segment]:
         """
@@ -122,50 +80,54 @@ class DocumentSegmenter:
             logger.error(f"Error in spaCy text segmentation: {e}")
             raise
 
-    async def _segment_non_linear_elements(self, result: Dict[str, Any]) -> List[Segment]:
+    async def _segment_non_linear_elements(self, result: List[Dict[str, Any]]) -> List[Segment]:
         """
         Segment non-linear elements like tables, lists, or figures.
 
         Args:
-            result (Dict[str, Any]): The result of processing the document.
+            result (List[Dict[str, Any]]): The result of processing the document.
 
         Returns:
             List[Segment]: A list of Segment instances representing the non-linear elements.
         """
         try:
             segments = []
+            serial_counter = 1
 
             # Handle Tables
             if "tables" in result:
                 for table_index, table in enumerate(result["tables"]):
                     table_text = f"Table {table_index + 1}: {table['caption']}"
                     segments.append(Segment(
-                        serial=len(segments),
+                        serial=serial_counter,
                         text=table_text,
                         confidence=1.0,
                         relationship_type="non_linear"
                     ))
+                    serial_counter += 1
 
                     # Segmenting the table content
                     for row_index, row in enumerate(table.get("rows", [])):
                         row_text = " | ".join(row)
                         segments.append(Segment(
-                            serial=len(segments),
+                            serial=serial_counter,
                             text=f"Table {table_index + 1}, Row {row_index + 1}: {row_text}",
                             confidence=1.0,
                             relationship_type="non_linear_row"
                         ))
+                        serial_counter += 1
 
             # Handle Figures
             if "figures" in result:
                 for figure_index, figure in enumerate(result["figures"]):
                     figure_text = f"Figure {figure_index + 1}: {figure['caption']}"
                     segments.append(Segment(
-                        serial=len(segments),
+                        serial=serial_counter,
                         text=figure_text,
                         confidence=1.0,
                         relationship_type="non_linear"
                     ))
+                    serial_counter += 1
 
             # Handle Lists
             if "lists" in result:
@@ -173,11 +135,12 @@ class DocumentSegmenter:
                     for item_index, item in enumerate(list_items):
                         item_text = f"List {list_index + 1}, Item {item_index + 1}: {item}"
                         segments.append(Segment(
-                            serial=len(segments),
+                            serial=serial_counter,
                             text=item_text,
                             confidence=1.0,
                             relationship_type="non_linear_list_item"
                         ))
+                        serial_counter += 1
 
             logger.info(f"Completed non-linear element segmentation with {len(segments)} segments.")
             return segments
@@ -244,30 +207,34 @@ class DocumentSegmenter:
         Returns:
             bool: True if the segments represent a label-value pair, False otherwise.
         """
-        # Simple heuristic: if the first segment ends with a colon and the second does not start with a capital letter
         if text1.strip().endswith(":"):
             return True
         return False
 
+# Example Usage:
 if __name__ == "__main__":
-    import asyncio
-    
-    # Example usage of the DocumentSegmenter class
-    logger.info("Initializing DocumentSegmenter for testing...")
+    # Initialize the DocumentSegmenter
     segmenter = DocumentSegmenter()
 
-    result = {
-        "text": "Introduction to sustainable energy. This is a sample document. It contains multiple sentences. Each sentence is a segment. However, there are some differences.",
-        "tables": [{"caption": "Energy Investments by Year", "rows": [["Year", "Solar", "Wind", "Hydro"], ["2020", "100MW", "150MW", "200MW"], ["2021", "110MW", "160MW", "210MW"]]}],
-        "figures": [{"caption": "Growth of Renewable Energy Sources"}],
-        "lists": [["Solar energy", "Wind energy", "Hydroelectric energy"]]
-    }
-    
-    logger.info("Starting document segmentation...")
-    segments = asyncio.run(segmenter.segment_document(result, "text"))
-    
-    logger.info("Document segmentation complete. Printing segments...")
-    for seg in segments:
-        print(seg)
+    # Process the document and segment it
+    result = [
+        {
+            "text": "This is the first sentence. This is the second sentence."
+        },
+        {
+            "tables": [
+                {"caption": "Table 1", "rows": [["A", "B"], ["C", "D"]]}
+            ],
+            "figures": [
+                {"caption": "Figure 1"}
+            ],
+            "lists": [
+                ["Item 1", "Item 2"]
+            ]
+        }
+    ]
+    segments = segmenter.segment_document(result)
 
-    logger.info("Document segmentation test completed.")
+    # Print the segmented units
+    for segment in segments:
+        print(f"Segment {segment.serial}: {segment.text} (Relates to: {segment.relates_to}, Type: {segment.relationship_type})")

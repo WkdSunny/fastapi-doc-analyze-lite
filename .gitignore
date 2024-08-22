@@ -63,3 +63,4 @@ dump.rdb
 ignr.*
 .dataBank/
 tests/
+.Local
